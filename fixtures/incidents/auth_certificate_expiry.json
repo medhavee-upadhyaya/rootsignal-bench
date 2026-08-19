@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "id": "auth-certificate-001",
+  "title": "Authentication failures",
+  "summary": "auth-gateway login failures began at midnight with no application deployment",
+  "telemetry": {
+    "metrics": {
+      "auth.login.failure_rate": "0.2% before 00:00Z; 87% after 00:00Z",
+      "auth.gateway.cpu": "31%, normal",
+      "auth.upstream.tls_errors": "0 before 00:00Z; 9400 after"
+    },
+    "logs": [
+      "auth-gateway ERROR x509: certificate has expired or is not yet valid",
+      "auth-gateway ERROR upstream identity-provider TLS handshake failed",
+      "identity-provider INFO process healthy"
+    ],
+    "deployments": ["No auth-gateway or identity-provider deployments in the previous 72 hours"]
+  },
+  "runbooks": [{
+    "id": "certificate-expiry",
+    "title": "Expired service certificate",
+    "content": "For a sharp midnight increase in TLS failures without a deployment, inspect certificate expiration. Rotate the certificate, reload the dependent service, and verify the complete chain."
+  }],
+  "oracle": {
+    "root_cause": "The auth-gateway upstream identity-provider certificate expired at midnight, causing TLS handshakes and logins to fail.",
+    "required_evidence": ["failure rate 0.2% 87%", "TLS errors 0 9400", "certificate expired", "no deployments"],
+    "remediation": ["Rotate the expired certificate", "Reload auth-gateway", "Alert before certificate expiration"],
+    "expected_tools": ["query_metrics", "query_logs", "query_deployments", "retrieve_knowledge"]
+  }
+}

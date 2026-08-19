@@ -1,0 +1,10 @@
+{
+  "experiment": "rootsignal-tool-selector-v1",
+  "base_model": "Qwen/Qwen3-1.7B",
+  "task": "next-tool selection with structured arguments",
+  "seed": 17,
+  "lora": {"rank": 16, "alpha": 32, "dropout": 0.05, "target_modules": "all-linear"},
+  "training": {"epochs": 3, "learning_rate": 0.0002, "batch_size": 2, "gradient_accumulation": 8},
+  "evaluation": ["tool_name_accuracy", "argument_validity", "task_completion", "latency_ms"],
+  "notes": "Do not train on evaluation incident templates. Expand and review the trajectory dataset before publishing an adapter."
+}

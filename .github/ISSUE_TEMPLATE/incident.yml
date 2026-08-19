@@ -1,0 +1,23 @@
+name: Contribute an incident
+description: Propose a safe, reproducible benchmark fixture
+title: "[incident]: "
+labels: ["benchmark", "needs-review"]
+body:
+  - type: textarea
+    id: failure
+    attributes:
+      label: Failure scenario
+      description: Describe the causal chain, observables, and distractors without private data.
+    validations: {required: true}
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required evidence and remediation
+    validations: {required: true}
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: This proposal contains no secrets, personal data, or proprietary material.
+          required: true

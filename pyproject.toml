@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rootsignal-bench"
+version = "0.1.0"
+description = "Benchmark and reference system for tool-using incident investigation agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "Medhavee Upadhyaya"}]
+dependencies = []
+
+[project.optional-dependencies]
+api = ["fastapi>=0.115,<1", "uvicorn[standard]>=0.30,<1", "pydantic>=2.8,<3", "pyyaml>=6,<7"]
+observability = ["opentelemetry-api>=1.27,<2", "opentelemetry-sdk>=1.27,<2"]
+train = ["datasets>=3,<4", "peft>=0.13,<1", "transformers>=4.45,<5", "torch>=2.4,<3", "trl>=0.11,<1"]
+dev = ["ruff>=0.7,<1", "mypy>=1.12,<2"]
+
+[project.scripts]
+rootsignal = "incidentlab.cli:main"
+incidentlab = "incidentlab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["incidentlab*", "evals*", "training*", "benchmarks*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

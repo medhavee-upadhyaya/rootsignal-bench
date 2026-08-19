@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "id": "search-cache-001",
+  "title": "Search database load spike",
+  "summary": "search-api database load and latency spiked after a cache configuration rollout",
+  "telemetry": {
+    "metrics": {
+      "search.cache.hit_rate": "94% before rollout; 8% after",
+      "search.db.qps": "1200 before; 11800 after",
+      "search.p95_latency": "180ms before; 1900ms after",
+      "search.traffic": "stable"
+    },
+    "logs": [
+      "search-api WARN cache eviction rate=9200/min",
+      "search-api INFO cache maxmemory=256mb policy=allkeys-lru",
+      "search-db WARN connection utilization 96%"
+    ],
+    "deployments": ["search-cache configuration changed maxmemory 4gb -> 256mb at 17:32Z"]
+  },
+  "runbooks": [{
+    "id": "cache-hit-collapse",
+    "title": "Cache hit-rate collapse",
+    "content": "When cache hit rate collapses while traffic is stable, inspect capacity and eviction configuration. Restore safe capacity and warm the cache while protecting the database."
+  }],
+  "oracle": {
+    "root_cause": "The cache rollout reduced maxmemory from 4GB to 256MB, causing heavy eviction, an 8% hit rate, and excessive database load.",
+    "required_evidence": ["hit rate 94% 8%", "db qps 1200 11800", "eviction 9200", "maxmemory 4gb 256mb"],
+    "remediation": ["Restore cache maxmemory to 4GB", "Warm the search cache", "Protect the database with load shedding"],
+    "expected_tools": ["query_metrics", "query_logs", "query_deployments", "retrieve_knowledge"]
+  }
+}

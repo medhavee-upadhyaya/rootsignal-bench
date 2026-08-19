@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: RootSignal Bench
+message: If you use RootSignal Bench in research, please cite this software.
+type: software
+authors:
+  - family-names: Upadhyaya
+    given-names: Medhavee
+version: 0.1.0
+date-released: 2026-08-14
+license: Apache-2.0
+repository-code: https://github.com/medhavee-upadhyaya/rootsignal-bench

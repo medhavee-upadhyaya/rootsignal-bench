@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "id": "payments-queue-001",
+  "title": "Payment confirmations delayed",
+  "summary": "payments-worker confirmation delay increased while request traffic remained stable",
+  "telemetry": {
+    "metrics": {
+      "payments.queue.depth": "120 before 14:00Z; 18400 after 14:08Z",
+      "payments.consumer.rate": "820/min before; 95/min after",
+      "payments.producer.rate": "790/min, stable",
+      "payments.worker.cpu": "19%, below normal"
+    },
+    "logs": [
+      "payments-worker WARN message handler retrying: downstream risk-api returned 429",
+      "payments-worker INFO retry backoff=30s attempt=4",
+      "payments-api INFO request rate stable"
+    ],
+    "deployments": [
+      "risk-api rate-limit policy changed at 14:06Z from 1000/min to 100/min",
+      "payments-worker v3.4.1 deployed two days earlier"
+    ]
+  },
+  "runbooks": [{
+    "id": "queue-backlog",
+    "title": "Consumer queue backlog",
+    "content": "When queue depth rises and consumer throughput falls while producer rate is stable, inspect downstream throttling and retry backoff. Restore safe rate limits before scaling consumers."
+  }],
+  "oracle": {
+    "root_cause": "The risk-api rate limit was reduced to 100 requests per minute, throttling payments-worker and creating a confirmation queue backlog.",
+    "required_evidence": ["queue depth 120 18400", "consumer rate 820 95", "risk-api 429", "rate-limit 1000 100"],
+    "remediation": ["Restore the risk-api rate limit", "Drain the payment confirmation queue", "Alert on consumer-to-producer rate divergence"],
+    "expected_tools": ["query_metrics", "query_logs", "query_deployments", "retrieve_knowledge"]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "id": "catalog-memory-001",
+  "title": "Catalog pods restarting",
+  "summary": "catalog-api pods began restarting repeatedly several hours after v2.7.0",
+  "telemetry": {
+    "metrics": {
+      "catalog.memory_rss": "620MiB after restart; grows linearly to 2048MiB over 3 hours",
+      "catalog.container.limit": "2048MiB",
+      "catalog.restart_count": "0 before v2.7.0; 14 after",
+      "catalog.request_rate": "stable"
+    },
+    "logs": [
+      "catalog-api INFO cache entries=184220 and increasing",
+      "kubelet WARN container catalog-api terminated reason=OOMKilled",
+      "catalog-api INFO starting v2.7.0"
+    ],
+    "deployments": ["catalog-api v2.7.0 enabled unbounded product-detail cache at 09:10Z"]
+  },
+  "runbooks": [{
+    "id": "memory-growth",
+    "title": "Progressive memory growth",
+    "content": "Linear memory growth ending at the container limit with OOMKilled restarts indicates retained allocations. Compare recent cache or buffering changes and roll back before raising limits."
+  }],
+  "oracle": {
+    "root_cause": "The unbounded product-detail cache introduced in catalog-api v2.7.0 retained entries until the 2048MiB limit caused OOMKilled restarts.",
+    "required_evidence": ["memory 620MiB 2048MiB", "OOMKilled", "unbounded cache", "request rate stable"],
+    "remediation": ["Roll back v2.7.0", "Bound the product-detail cache", "Alert on sustained memory growth"],
+    "expected_tools": ["query_metrics", "query_logs", "query_deployments", "retrieve_knowledge"]
+  }
+}

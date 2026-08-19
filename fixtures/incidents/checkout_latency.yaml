@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "id": "checkout-latency-001",
+  "title": "Checkout latency after deployment",
+  "summary": "checkout-api p95 latency increased immediately after deployment v1.8.3",
+  "telemetry": {
+    "metrics": {
+      "checkout_api.p95_latency": "240ms before v1.8.3; 2800ms after v1.8.3",
+      "checkout_api.cpu_utilization": "42%, within normal range",
+      "db.pool.wait_ms": "35ms before v1.8.3; 1830ms after v1.8.3",
+      "db.connections.active": "10 of 10"
+    },
+    "logs": [
+      "checkout-api ERROR database connection acquisition timed out after 2000ms",
+      "checkout-api WARN request POST /checkout completed in 2874ms",
+      "catalog-api INFO health check passed"
+    ],
+    "deployments": [
+      "checkout-api v1.8.3 deployed at 10:02Z; config change DB_POOL_SIZE 40 -> 10",
+      "catalog-api v2.1.0 deployed previous day; no relevant configuration changes"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "db-pool-exhaustion",
+      "title": "Database pool exhaustion",
+      "content": "When pool wait time rises while CPU is normal, compare active connections with pool capacity and recent pool configuration. Restore the last known safe size or roll back."
+    },
+    {
+      "id": "high-cpu",
+      "title": "High application CPU",
+      "content": "If CPU exceeds 85 percent, inspect hot endpoints and recent traffic changes."
+    }
+  ],
+  "oracle": {
+    "root_cause": "Deployment v1.8.3 reduced checkout-api DB_POOL_SIZE from 40 to 10, exhausting the database connection pool.",
+    "required_evidence": [
+      "p95 latency 240ms 2800ms",
+      "db.pool.wait_ms 35ms 1830ms",
+      "DB_POOL_SIZE 40 10",
+      "CPU normal"
+    ],
+    "remediation": [
+      "Restore DB_POOL_SIZE to 40",
+      "Roll back deployment v1.8.3 if configuration restoration is unsafe",
+      "Alert on database pool wait time and saturation"
+    ],
+    "expected_tools": ["query_metrics", "query_logs", "query_deployments", "search_runbooks"]
+  }
+}

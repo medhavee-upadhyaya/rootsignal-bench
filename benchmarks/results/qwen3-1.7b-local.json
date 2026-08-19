@@ -1,0 +1,20 @@
+{
+  "schema_version": "1",
+  "kind": "live-model",
+  "model": "Qwen3-1.7B GGUF",
+  "runtime": "llama.cpp CPU",
+  "hardware": "Apple M4, 16 GB unified memory",
+  "fixture_count": 5,
+  "aggregate": {
+    "root_cause": 0.3135,
+    "tool_selection": 0.95,
+    "evidence_coverage": 0.65,
+    "remediation_coverage": 1.0,
+    "overall": 0.6622,
+    "mean_latency_ms": 8827.17,
+    "citation_validity": 1.0,
+    "model_planned_steps": 19,
+    "agent_steps": 20
+  },
+  "disclosure": "Development baseline measured on five synthetic incidents. Not a production-quality claim."
+}
