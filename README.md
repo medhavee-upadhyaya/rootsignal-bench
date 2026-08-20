@@ -30,13 +30,6 @@ The working application uses a persistent SQLite FTS5 knowledge base, read-only 
 | Benchmark model serving | TTFT, latency, token throughput, concurrency sweep, and SLO verdict |
 | Operate the application | Metrics, traces, structured events, alerts, dashboards, and health probes |
 
-## Why engineers star this project
-
-- **It grades behavior, not vibes.** Tool choice, evidence coverage, citations, remediation, retrieval, latency, and failures are machine-readable.
-- **It is reproducible on a laptop.** Five incident replays, a deterministic baseline, a local-model adapter, and one-command verification require no paid API.
-- **It spans the real lifecycle.** Hybrid RAG, bounded tools, LoRA training, inference load testing, metrics, containers, Kubernetes, CI, security, and model documentation live in one coherent system.
-- **It is honest about boundaries.** Oracle-backed and live-model results are separated. Hardware-dependent claims require manifests. Missing evidence is visible.
-
 ## What makes this different
 
 Most agent demos grade the final prose. RootSignal Bench grades the investigation itself.
