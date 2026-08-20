@@ -1,0 +1,38 @@
+name: Submit a model result
+description: Propose a reproducible model-backed scorecard or inference result
+title: "[result]: "
+labels: ["benchmark", "model-result", "needs-review"]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Model and immutable revision
+    validations: {required: true}
+  - type: textarea
+    id: runtime
+    attributes:
+      label: Runtime and hardware
+      description: Server version, dtype, quantization, accelerators, memory, and operating system.
+    validations: {required: true}
+  - type: textarea
+    id: commands
+    attributes:
+      label: Reproduction commands
+    validations: {required: true}
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Result artifacts and digests
+      description: Link complete machine-readable output, configuration, and dataset or prompt digests.
+    validations: {required: true}
+  - type: checkboxes
+    id: integrity
+    attributes:
+      label: Integrity confirmation
+      options:
+        - label: The model received only public observations and no fixture oracle.
+          required: true
+        - label: Failures and all measured concurrency points are included.
+          required: true
+        - label: No secrets, private data, or unlicensed model artifacts are included.
+          required: true

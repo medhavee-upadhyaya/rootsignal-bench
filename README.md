@@ -6,12 +6,29 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-167a5b)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-182321)](pyproject.toml)
 [![Benchmark](https://img.shields.io/badge/retrieval-Recall%402%201.00-c8f361)](docs/RESULTS.md)
+[![Security](https://github.com/medhavee-upadhyaya/rootsignal-bench/actions/workflows/security.yml/badge.svg)](https://github.com/medhavee-upadhyaya/rootsignal-bench/actions/workflows/security.yml)
+[![Release](https://img.shields.io/badge/release-v0.2-5dd6c0)](CHANGELOG.md)
 
 RootSignal is an open benchmark and production reference system for AI agents that investigate failures using logs, metrics, traces, runbooks, and deployment history. It makes the entire LLM systems lifecycle inspectable: dataset construction, retrieval, tool use, fine-tuning, inference, evaluation, observability, and deployment.
 
 The working application uses a persistent SQLite FTS5 knowledge base, read-only diagnostic tools, and an OpenAI-compatible local model server. The same inference client targets llama.cpp for laptop development and vLLM for production GPU serving.
 
 > Status: `v0.2` working reference system. The deterministic policy is an explicitly labeled plumbing baseline; model results are reported separately and include failures.
+
+**Built for:** LLM systems engineers comparing agent architectures, SRE and platform teams prototyping evidence-grounded incident response, and researchers who need reproducible tool-use evaluation instead of one-off demos.
+
+[Quickstart](#five-minute-quickstart) · [Measured results](docs/RESULTS.md) · [Benchmark contract](docs/BENCHMARK.md) · [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Contributing](CONTRIBUTING.md)
+
+## What you can do with RootSignal
+
+| Workflow | Concrete output |
+|---|---|
+| Replay a production incident | Evidence-grounded diagnosis with citations and remediation |
+| Compare agent or model changes | Versioned scorecard across tool choice, evidence, citations, and outcome |
+| Evaluate retrieval changes | Recall@k, MRR, strategy ablation, and auditable reranking scores |
+| Train a tool selector | Template-isolated train/eval data, LoRA entry point, and artifact manifests |
+| Benchmark model serving | TTFT, latency, token throughput, concurrency sweep, and SLO verdict |
+| Operate the application | Metrics, traces, structured events, alerts, dashboards, and health probes |
 
 ## Why engineers star this project
 
@@ -38,6 +55,8 @@ Most agent demos grade the final prose. RootSignal Bench grades the investigatio
 python -m incidentlab.cli investigate fixtures/incidents/checkout_latency.yaml
 python -m unittest discover -s tests -v
 ```
+
+This path is deterministic, offline, and requires no model credentials. For the interactive model-backed workspace, continue to [Run the full product](#run-the-full-product). A guided end-to-end walkthrough is available in [docs/DEMO.md](docs/DEMO.md).
 
 ### Run the full product
 
@@ -195,7 +214,7 @@ For deployment, `docker compose up --build` runs the complete web and API stack.
 
 - [x] Reproducible end-to-end incident and deterministic baseline
 - [x] Typed tools, evidence ledger, retrieval, API, CLI, and regression tests
-- [x] Evaluation, dataset generation, training, load-test, and deployment scaffolds
+- [x] Evaluation, artifact-validated training pipeline, streaming inference benchmark, and deployment stack
 - [ ] 50 human-reviewed benchmark incidents across five failure classes
 - [ ] Hosted-model and local-model scorecards
 - [ ] Public LoRA adapter with ablations

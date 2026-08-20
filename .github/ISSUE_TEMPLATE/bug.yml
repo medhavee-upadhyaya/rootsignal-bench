@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible defect in the application or benchmark
+title: "[bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, private telemetry, customer data, or proprietary runbooks.
+  - type: input
+    id: revision
+    attributes:
+      label: RootSignal revision
+      description: Commit SHA or release version where the issue occurs.
+    validations: {required: true}
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include commands, synthetic inputs, and the observed result.
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations: {required: true}
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python or Node version, model runtime, and deployment method.
+    validations: {required: true}
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: This report contains no secrets, personal data, or proprietary material.
+          required: true
