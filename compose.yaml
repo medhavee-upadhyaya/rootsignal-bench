@@ -1,13 +1,42 @@
 services:
   api:
-    build: .
-    ports: ["8000:8000"]
+    build:
+      context: .
     environment:
       INCIDENTLAB_FIXTURES: /app/fixtures/incidents
+      INCIDENTLAB_DB: /data/incidentlab.db
+      INCIDENTLAB_LLM_URL: ${INCIDENTLAB_LLM_URL:-http://host.docker.internal:11434}
+      INCIDENTLAB_MODEL: ${INCIDENTLAB_MODEL:-qwen3:1.7b}
+      ROOTSIGNAL_RATE_LIMIT: ${ROOTSIGNAL_RATE_LIMIT:-60}
+    ports: ["8000:8000"]
+    volumes:
+      - rootsignal-data:/data
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    extra_hosts: ["host.docker.internal:host-gateway"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
       interval: 10s
       timeout: 3s
       retries: 5
+      start_period: 10s
+
+  web:
+    build:
+      context: web
+    environment:
+      INCIDENTLAB_API_URL: http://api:8000
+    ports: ["3000:3000"]
+    depends_on:
+      api: {condition: service_healthy}
     read_only: true
-    tmpfs: ["/tmp"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+volumes:
+  rootsignal-data:

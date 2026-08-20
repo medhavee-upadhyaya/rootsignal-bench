@@ -1,35 +1,154 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rootsignal-config
+data:
+  INCIDENTLAB_FIXTURES: /app/fixtures/incidents
+  INCIDENTLAB_DB: /data/incidentlab.db
+  INCIDENTLAB_LLM_URL: http://vllm:8000
+  INCIDENTLAB_MODEL: Qwen/Qwen2.5-7B-Instruct
+  ROOTSIGNAL_RATE_LIMIT: "60"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rootsignal-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 1Gi}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rootsignal
+  name: rootsignal-api
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
   selector:
-    matchLabels: {app: rootsignal}
+    matchLabels: {app: rootsignal-api}
   template:
     metadata:
-      labels: {app: rootsignal}
+      labels: {app: rootsignal-api}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8000"
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
       containers:
         - name: api
-          image: ghcr.io/medhavee-upadhyaya/rootsignal-bench:latest
-          ports: [{containerPort: 8000}]
+          image: ghcr.io/medhavee-upadhyaya/rootsignal-bench:0.2.0
+          imagePullPolicy: IfNotPresent
+          envFrom: [{configMapRef: {name: rootsignal-config}}]
+          ports: [{name: http, containerPort: 8000}]
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
-            limits: {cpu: "1", memory: 512Mi}
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            failureThreshold: 30
+            periodSeconds: 2
           readinessProbe:
-            httpGet: {path: /readyz, port: 8000}
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            failureThreshold: 3
           livenessProbe:
-            httpGet: {path: /healthz, port: 8000}
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          volumeMounts: [{name: data, mountPath: /data}]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+      volumes: [{name: data, persistentVolumeClaim: {claimName: rootsignal-data}}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rootsignal-web
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {app: rootsignal-web}
+  template:
+    metadata:
+      labels: {app: rootsignal-web}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: web
+          image: ghcr.io/medhavee-upadhyaya/rootsignal-bench-web:0.2.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: INCIDENTLAB_API_URL
+              value: http://rootsignal-api:8000
+          ports: [{name: http, containerPort: 3000}]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+          livenessProbe:
+            httpGet: {path: /, port: http}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: rootsignal
+  name: rootsignal-api
 spec:
-  selector: {app: rootsignal}
-  ports: [{port: 80, targetPort: 8000}]
+  selector: {app: rootsignal-api}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rootsignal-web
+spec:
+  selector: {app: rootsignal-web}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rootsignal-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: rootsignal-api}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rootsignal-api
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: rootsignal-api}
+  minReplicas: 2
+  maxReplicas: 10
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: 70}

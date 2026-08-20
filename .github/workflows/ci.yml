@@ -31,5 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+      - run: docker compose config --quiet
       - uses: docker/build-push-action@v6
-        with: {context: ., push: false, tags: rootsignal:ci}
+        with: {context: ., push: false, tags: rootsignal:ci, cache-from: type=gha, cache-to: type=gha,mode=max}
+      - uses: docker/build-push-action@v6
+        with: {context: web, push: false, tags: rootsignal-web:ci, cache-from: type=gha, cache-to: type=gha,mode=max}
