@@ -20,6 +20,15 @@ These weights are versioned. Scores from different schema or rubric versions mus
 
 Fixtures are split by incident template, not only by rendered example. Dataset generation should keep evaluation templates out of training. Public leaderboard submissions must record dataset hashes, model identity, prompt/configuration digest, hardware, and code revision.
 
+## Adversarial tool-use contract
+
+`python -m evals.adversarial --minimum 1.0` verifies that the execution layer
+blocks unregistered tools, strips unknown arguments, bounds argument length,
+deduplicates repeated calls, and enforces the tool budget. Separate hostile
+planner tests verify safe fallback behavior, citation-range validation,
+confidence clamping, and evidence fallback when a model returns malformed or
+unsupported output.
+
 ## Adding an incident
 
 An acceptable incident has a single defensible cause, at least one distractor, a timestamped causal sequence, sufficient observable evidence, safe synthetic data, and remediation criteria. A second reviewer should be able to reproduce the oracle without private knowledge.
