@@ -15,7 +15,8 @@ jobs:
       - run: python -m evals.run --fixtures fixtures/incidents --minimum 0.80
       - run: python -m evals.retrieval --fixtures fixtures/incidents --k 2 --ablation --minimum-recall 1.0
       - run: python -m evals.adversarial --minimum 1.0
-      - run: python -m training.build_dataset --fixtures fixtures/incidents --output /tmp/tool_calls.jsonl
+      - run: python -m training.build_dataset --fixtures fixtures/incidents --output-dir /tmp/rootsignal-dataset
+      - run: python -m training.validate_artifacts --dataset-manifest /tmp/rootsignal-dataset/dataset_manifest.json
   web:
     runs-on: ubuntu-latest
     steps:
