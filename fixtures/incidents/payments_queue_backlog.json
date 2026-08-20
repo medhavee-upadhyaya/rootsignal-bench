@@ -3,6 +3,7 @@
   "id": "payments-queue-001",
   "title": "Payment confirmations delayed",
   "summary": "payments-worker confirmation delay increased while request traffic remained stable",
+  "metadata": {"failure_class": "queue-backlog", "difficulty": "hard", "license": "CC0-1.0", "synthetic": true},
   "telemetry": {
     "metrics": {
       "payments.queue.depth": "120 before 14:00Z; 18400 after 14:08Z",

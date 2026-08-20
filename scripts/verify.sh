@@ -8,6 +8,7 @@ else
 fi
 
 "$PYTHON_BIN" -m unittest discover -s tests -v
+"$PYTHON_BIN" -m evals.validate_fixtures --fixtures fixtures/incidents
 EVAL_DIR="$(mktemp -d)"
 EVAL_RESULT="$EVAL_DIR/rootsignal-eval.json"
 "$PYTHON_BIN" -m evals.run --fixtures fixtures/incidents --minimum 0.80 --output "$EVAL_RESULT"

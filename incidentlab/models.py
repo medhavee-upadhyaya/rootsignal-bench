@@ -25,6 +25,7 @@ class Incident:
     telemetry: dict[str, Any]
     runbooks: list[dict[str, str]]
     oracle: dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

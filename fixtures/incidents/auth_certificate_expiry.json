@@ -3,6 +3,7 @@
   "id": "auth-certificate-001",
   "title": "Authentication failures",
   "summary": "auth-gateway login failures began at midnight with no application deployment",
+  "metadata": {"failure_class": "certificate-expiry", "difficulty": "medium", "license": "CC0-1.0", "synthetic": true},
   "telemetry": {
     "metrics": {
       "auth.login.failure_rate": "0.2% before 00:00Z; 87% after 00:00Z",

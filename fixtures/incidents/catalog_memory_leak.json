@@ -3,6 +3,7 @@
   "id": "catalog-memory-001",
   "title": "Catalog pods restarting",
   "summary": "catalog-api pods began restarting repeatedly several hours after v2.7.0",
+  "metadata": {"failure_class": "memory-leak", "difficulty": "medium", "license": "CC0-1.0", "synthetic": true},
   "telemetry": {
     "metrics": {
       "catalog.memory_rss": "620MiB after restart; grows linearly to 2048MiB over 3 hours",

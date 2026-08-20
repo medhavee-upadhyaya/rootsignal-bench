@@ -3,6 +3,7 @@
   "id": "search-cache-001",
   "title": "Search database load spike",
   "summary": "search-api database load and latency spiked after a cache configuration rollout",
+  "metadata": {"failure_class": "cache-capacity", "difficulty": "medium", "license": "CC0-1.0", "synthetic": true},
   "telemetry": {
     "metrics": {
       "search.cache.hit_rate": "94% before rollout; 8% after",

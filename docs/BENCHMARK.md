@@ -4,7 +4,7 @@ RootSignal Bench measures investigation behavior rather than stylistic similarit
 
 ## Fixture anatomy
 
-The public observation contains the incident summary, telemetry, runbooks, and distractors. The oracle contains the root cause, required evidence, remediation criteria, and expected tools. Runtime adapters must not place the oracle in the model context.
+The public observation contains the incident summary, telemetry, runbooks, and distractors. The oracle contains the root cause, required evidence, remediation criteria, and expected tools. Runtime adapters must not place the oracle in the model context. Every fixture also declares its failure class, difficulty, license, and synthetic-data status.
 
 ## Metrics
 
@@ -20,6 +20,8 @@ These weights are versioned. Scores from different schema or rubric versions mus
 
 Fixtures are split by incident template, not only by rendered example. Dataset generation should keep evaluation templates out of training. Public leaderboard submissions must record dataset hashes, model identity, prompt/configuration digest, hardware, and code revision.
 
+`python -m evals.validate_fixtures --fixtures fixtures/incidents` enforces the fixture schema, unique incident IDs, unique public observations, non-empty telemetry/runbooks/oracles, explicit provenance metadata, and absence of an exact root-cause string in the public observation. Exact-string detection is a minimum leakage control, not proof against semantic contamination; proposed fixtures still require review.
+
 ## Adversarial tool-use contract
 
 `python -m evals.adversarial --minimum 1.0` verifies that the execution layer
@@ -32,6 +34,8 @@ unsupported output.
 ## Adding an incident
 
 An acceptable incident has a single defensible cause, at least one distractor, a timestamped causal sequence, sufficient observable evidence, safe synthetic data, and remediation criteria. A second reviewer should be able to reproduce the oracle without private knowledge.
+
+Evaluation schema v3 reports aggregate uncertainty and scores sliced by declared failure class and difficulty. A slice containing one fixture is descriptive only and must not be interpreted as a stable population estimate.
 
 ## Baseline disclosure
 

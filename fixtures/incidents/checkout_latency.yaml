@@ -3,6 +3,7 @@
   "id": "checkout-latency-001",
   "title": "Checkout latency after deployment",
   "summary": "checkout-api p95 latency increased immediately after deployment v1.8.3",
+  "metadata": {"failure_class": "database-saturation", "difficulty": "easy", "license": "CC0-1.0", "synthetic": true},
   "telemetry": {
     "metrics": {
       "checkout_api.p95_latency": "240ms before v1.8.3; 2800ms after v1.8.3",

@@ -22,9 +22,17 @@ def main() -> None:
     if not paths:
         raise SystemExit("No fixtures found")
     scores = []
+    dimensions: dict[str, dict[str, list[dict[str, str | float]]]] = {
+        "failure_class": {},
+        "difficulty": {},
+    }
     for path in paths:
         incident = load_incident(path)
-        scores.append(score(incident, Investigator().investigate(incident)).as_dict())
+        scorecard = score(incident, Investigator().investigate(incident)).as_dict()
+        scores.append(scorecard)
+        for dimension in dimensions:
+            value = str(incident.metadata[dimension])
+            dimensions[dimension].setdefault(value, []).append(scorecard)
     metric_names = [
         "root_cause",
         "tool_selection",
@@ -46,6 +54,18 @@ def main() -> None:
         ).as_dict()
         for metric in metric_names
     }
+    slices = {
+        dimension: {
+            value: {
+                "fixture_count": len(items),
+                "overall": round(
+                    sum(float(item["overall"]) for item in items) / len(items), 4
+                ),
+            }
+            for value, items in sorted(groups.items())
+        }
+        for dimension, groups in dimensions.items()
+    }
     report = {
         "schema_version": "3",
         "fixture_count": len(scores),
@@ -57,6 +77,7 @@ def main() -> None:
             "seed": args.seed,
             "bootstrap_samples": args.bootstrap_samples,
         },
+        "slices": slices,
     }
     payload = json.dumps(report, indent=2)
     if args.output:
