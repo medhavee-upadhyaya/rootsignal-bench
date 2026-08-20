@@ -17,7 +17,7 @@ The working application uses a persistent SQLite FTS5 knowledge base, read-only 
 
 **Built for:** LLM systems engineers comparing agent architectures, SRE and platform teams prototyping evidence-grounded incident response, and researchers who need reproducible tool-use evaluation instead of one-off demos.
 
-[Quickstart](#five-minute-quickstart) · [Measured results](docs/RESULTS.md) · [Benchmark contract](docs/BENCHMARK.md) · [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Contributing](CONTRIBUTING.md)
+[Quickstart](#five-minute-quickstart) · [Measured results](docs/RESULTS.md) · [Benchmark contract](docs/BENCHMARK.md) · [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Releasing](docs/RELEASING.md) · [Contributing](CONTRIBUTING.md)
 
 ## What you can do with RootSignal
 
