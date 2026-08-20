@@ -12,7 +12,8 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: python -m unittest discover -s tests -v
-      - run: python -m evals.run --fixtures fixtures/incidents --minimum 0.80
+      - run: python -m evals.run --fixtures fixtures/incidents --minimum 0.80 --output /tmp/eval.json
+      - run: python -m evals.compare /tmp/eval.json /tmp/eval.json --max-regression 0
       - run: python -m evals.retrieval --fixtures fixtures/incidents --k 2 --ablation --minimum-recall 1.0
       - run: python -m evals.adversarial --minimum 1.0
       - run: python -m training.build_dataset --fixtures fixtures/incidents --output-dir /tmp/rootsignal-dataset

@@ -24,7 +24,7 @@ The working application uses a persistent SQLite FTS5 knowledge base, read-only 
 | Workflow | Concrete output |
 |---|---|
 | Replay a production incident | Evidence-grounded diagnosis with citations and remediation |
-| Compare agent or model changes | Versioned scorecard across tool choice, evidence, citations, and outcome |
+| Compare agent or model changes | Paired scorecards, bootstrap confidence intervals, and regression gates |
 | Evaluate retrieval changes | Recall@k, MRR, strategy ablation, and auditable reranking scores |
 | Train a tool selector | Template-isolated train/eval data, LoRA entry point, and artifact manifests |
 | Benchmark model serving | TTFT, latency, token throughput, concurrency sweep, and SLO verdict |

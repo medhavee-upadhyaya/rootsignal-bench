@@ -4,6 +4,18 @@ RootSignal separates deterministic infrastructure checks from model quality. A
 result is publishable only when its command, fixture count, model identity,
 hardware context, and machine-readable output are available.
 
+Evaluation schema v3 reports deterministic nonparametric bootstrap confidence intervals for every aggregate metric. Candidate changes are compared to a baseline by incident ID using paired deltas, which controls for fixture difficulty and refuses mismatched fixture sets.
+
+```bash
+python -m evals.run --fixtures fixtures/incidents --output work/baseline.json
+python -m evals.run --fixtures fixtures/incidents --output work/candidate.json
+python -m evals.compare work/baseline.json work/candidate.json \
+  --metric overall --max-regression 0.01 \
+  --minimum-lower-bound -0.02 --minimum-probability 0.80
+```
+
+The comparison reports per-incident deltas, wins/ties/losses, mean and median delta, a bootstrap confidence interval, and bootstrap probability of improvement. The CI is uncertainty over this fixture sample, not evidence that five synthetic incidents represent all production failures. Promotion can independently gate mean regression tolerance, the confidence-interval lower bound, and probability of improvement.
+
 ## Retrieval
 
 Command:
@@ -51,7 +63,7 @@ evidence, not universal performance claims. The complete result is stored in
 ## Deterministic plumbing baseline
 
 The deterministic baseline currently scores `0.940` across five fixtures under
-scorecard schema v2. It uses each fixture oracle for synthesis and therefore
+scorecard schema v3. It uses each fixture oracle for synthesis and therefore
 must never be compared with a model-quality score. Its purpose is regression
 testing for tools, evidence transport, evaluation, and API behavior.
 

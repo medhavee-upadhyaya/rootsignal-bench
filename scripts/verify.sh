@@ -8,7 +8,10 @@ else
 fi
 
 "$PYTHON_BIN" -m unittest discover -s tests -v
-"$PYTHON_BIN" -m evals.run --fixtures fixtures/incidents --minimum 0.80
+EVAL_DIR="$(mktemp -d)"
+EVAL_RESULT="$EVAL_DIR/rootsignal-eval.json"
+"$PYTHON_BIN" -m evals.run --fixtures fixtures/incidents --minimum 0.80 --output "$EVAL_RESULT"
+"$PYTHON_BIN" -m evals.compare "$EVAL_RESULT" "$EVAL_RESULT" --max-regression 0
 "$PYTHON_BIN" -m evals.retrieval --fixtures fixtures/incidents --k 2 --ablation --minimum-recall 1.0
 "$PYTHON_BIN" -m evals.adversarial --minimum 1.0
 DATASET_DIR="$(mktemp -d)/rootsignal-dataset"
