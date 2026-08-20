@@ -8,6 +8,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+RetrievalStrategy = Literal["lexical", "semantic", "hybrid", "reranked"]
 
 
 @dataclass(frozen=True)
@@ -18,6 +21,7 @@ class RetrievedChunk:
     score: float
     lexical_score: float = 0.0
     semantic_score: float = 0.0
+    rerank_score: float = 0.0
 
 
 def chunk_text(text: str, size: int = 700, overlap: int = 100) -> list[str]:
@@ -100,7 +104,11 @@ class KnowledgeBase:
             )
         return {"document_id": document_id, "chunks": len(chunks), "status": "indexed"}
 
-    def search(self, query: str, limit: int = 6) -> list[RetrievedChunk]:
+    def search(
+        self, query: str, limit: int = 6, strategy: RetrievalStrategy = "reranked"
+    ) -> list[RetrievedChunk]:
+        if strategy not in {"lexical", "semantic", "hybrid", "reranked"}:
+            raise ValueError(f"Unknown retrieval strategy: {strategy}")
         terms = re.findall(r"[a-zA-Z0-9_.-]+", query)
         if not terms:
             return []
@@ -117,6 +125,7 @@ class KnowledgeBase:
 
         lexical_rank = {row["chunk_id"]: index for index, row in enumerate(lexical_rows, 1)}
         lexical_raw = {row["chunk_id"]: 1 / (1 + abs(row["rank"])) for row in lexical_rows}
+        lexical_order = {chunk_id: 1 / rank for chunk_id, rank in lexical_rank.items()}
         query_vector = _hashed_vector(query)
         semantic = {
             row["chunk_id"]: _cosine(query_vector, _hashed_vector(row["content"])) for row in all_rows
@@ -135,15 +144,29 @@ class KnowledgeBase:
             + (1 / (60 + semantic_rank[chunk_id]))
             for chunk_id in rows_by_id
         }
-        selected = sorted(fused, key=lambda chunk_id: (-fused[chunk_id], chunk_id))[:limit]
+        reranked = {
+            chunk_id: _rerank(query, rows_by_id[chunk_id]["content"], fused[chunk_id])
+            for chunk_id in rows_by_id
+        }
+        scores = {
+            "lexical": lexical_order,
+            "semantic": semantic,
+            "hybrid": fused,
+            "reranked": reranked,
+        }[strategy]
+        selected = sorted(
+            rows_by_id,
+            key=lambda chunk_id: (-scores.get(chunk_id, 0.0), chunk_id),
+        )[:limit]
         return [
             RetrievedChunk(
                 chunk_id,
                 rows_by_id[chunk_id]["source"],
                 rows_by_id[chunk_id]["content"],
-                round(fused[chunk_id], 6),
+                round(scores.get(chunk_id, 0.0), 6),
                 round(lexical_raw.get(chunk_id, 0.0), 6),
                 round(semantic[chunk_id], 6),
+                round(reranked[chunk_id], 6),
             )
             for chunk_id in selected
         ]
@@ -173,3 +196,17 @@ def _cosine(left: dict[int, float], right: dict[int, float]) -> float:
     left_norm = math.sqrt(sum(value * value for value in left.values()))
     right_norm = math.sqrt(sum(value * value for value in right.values()))
     return dot / (left_norm * right_norm) if left_norm and right_norm else 0.0
+
+
+def _rerank(query: str, content: str, fused_score: float) -> float:
+    query_tokens = re.findall(r"[a-z0-9_.-]+", query.lower())
+    content_tokens = re.findall(r"[a-z0-9_.-]+", content.lower())
+    if not content_tokens:
+        return 0.0
+    query_terms = set(query_tokens)
+    content_terms = set(content_tokens)
+    term_coverage = len(query_terms & content_terms) / len(content_terms)
+    query_bigrams = set(zip(query_tokens, query_tokens[1:]))
+    content_bigrams = set(zip(content_tokens, content_tokens[1:]))
+    bigram_coverage = len(query_bigrams & content_bigrams) / max(len(content_bigrams), 1)
+    return (100 * fused_score) + (0.55 * term_coverage) + (0.25 * bigram_coverage)

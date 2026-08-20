@@ -9,17 +9,34 @@ hardware context, and machine-readable output are available.
 Command:
 
 ```bash
-python -m evals.retrieval --fixtures fixtures/incidents --k 2
+python -m evals.retrieval --fixtures fixtures/incidents --k 2 --ablation
 ```
 
 | Corpus | Queries | Recall@2 | MRR |
 |---|---:|---:|---:|
 | Public incident runbooks | 5 | 1.000 | 0.900 |
 
-The retriever combines SQLite FTS5 with deterministic hashed semantic features
-using weighted reciprocal-rank fusion. This compact implementation is intended
+### Strategy ablation
+
+| Strategy | Recall@2 | MRR |
+|---|---:|---:|
+| FTS5 lexical | 1.000 | 0.900 |
+| Hashed semantic | 0.400 | 0.300 |
+| Weighted RRF hybrid | 1.000 | 0.900 |
+| Hybrid + relevance reranker | 1.000 | 0.900 |
+
+The retriever exposes lexical, semantic, hybrid, and reranked strategies. The
+default combines SQLite FTS5 with deterministic hashed semantic features using
+weighted reciprocal-rank fusion, then applies an auditable term-and-bigram
+relevance reranker. The ablation command reports every strategy side by side
+and fails CI if default Recall@2 falls below `1.00`. This compact implementation is intended
 for reproducible evaluation; production deployments can replace the semantic
 encoder without changing provenance or scorecard contracts.
+
+The small public corpus does not show a gain from reranking, and the compact
+semantic baseline underperforms lexical retrieval. Both results are retained to
+prevent a more complex pipeline from being presented as an automatic quality
+improvement.
 
 ## Live local model
 
