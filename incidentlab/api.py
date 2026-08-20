@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import os
 import json
+import logging
 from pathlib import Path
 
 try:
-    from fastapi import FastAPI, HTTPException, Response
+    from fastapi import FastAPI, HTTPException, Request, Response
+    from fastapi.exceptions import RequestValidationError
+    from fastapi.responses import JSONResponse
     from pydantic import BaseModel, Field
 except ImportError as exc:  # pragma: no cover
     raise RuntimeError("Install RootSignal with the 'api' dependency group") from exc
 
 from .agent import Investigator
 from .fixtures import load_incident
+from .http import RateLimiter, request_id
 from .knowledge import KnowledgeBase
 from .llm import OllamaClient
 from .observability import METRICS
@@ -25,6 +29,71 @@ LLM = OllamaClient(
     os.getenv("INCIDENTLAB_MODEL", "qwen3:1.7b"),
 )
 app = FastAPI(title="RootSignal API", version="0.2.0")
+LOGGER = logging.getLogger("rootsignal.api")
+RATE_LIMITER = RateLimiter(
+    limit=int(os.getenv("ROOTSIGNAL_RATE_LIMIT", "60")),
+    window_seconds=float(os.getenv("ROOTSIGNAL_RATE_WINDOW_SECONDS", "60")),
+)
+RATE_LIMITED_PATHS = {"/v1/investigations", "/v1/knowledge", "/v1/baselines/deterministic"}
+
+
+def _error(code: str, message: str, correlation_id: str) -> dict[str, object]:
+    return {"error": {"code": code, "message": message, "request_id": correlation_id}}
+
+
+@app.middleware("http")
+async def harden_http(request: Request, call_next):
+    correlation_id = request_id(request.headers.get("x-request-id"))
+    request.state.request_id = correlation_id
+    if request.url.path in RATE_LIMITED_PATHS:
+        client = request.client.host if request.client else "unknown"
+        allowed, remaining, retry_after = RATE_LIMITER.allow(f"{client}:{request.url.path}")
+        if not allowed:
+            response = JSONResponse(
+                status_code=429,
+                content=_error("rate_limit_exceeded", "Too many requests", correlation_id),
+                headers={"Retry-After": str(retry_after)},
+            )
+        else:
+            response = await call_next(request)
+            response.headers["X-RateLimit-Remaining"] = str(remaining)
+    else:
+        response = await call_next(request)
+    response.headers["X-Request-ID"] = correlation_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
+    correlation_id = getattr(request.state, "request_id", request_id(None))
+    codes = {404: "not_found", 429: "rate_limit_exceeded", 503: "service_unavailable"}
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_error(codes.get(exc.status_code, "request_failed"), str(exc.detail), correlation_id),
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    correlation_id = getattr(request.state, "request_id", request_id(None))
+    fields = sorted({".".join(str(part) for part in error["loc"][1:]) for error in exc.errors()})
+    message = "Invalid request" + (f": {', '.join(fields)}" if fields else "")
+    return JSONResponse(status_code=422, content=_error("validation_error", message, correlation_id))
+
+
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    correlation_id = getattr(request.state, "request_id", request_id(None))
+    LOGGER.exception("Unhandled API error request_id=%s", correlation_id, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content=_error("internal_error", "Unexpected server error", correlation_id),
+    )
 
 
 class InvestigationRequest(BaseModel):
@@ -97,16 +166,21 @@ def metrics() -> Response:
 
 
 @app.post("/v1/investigations")
-def investigate(request: InvestigationRequest) -> dict[str, object]:
-    incident = _incident(request.incident_id)
+def investigate(payload: InvestigationRequest, request: Request) -> dict[str, object]:
+    incident = _incident(payload.incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Unknown incident")
-    query = request.query or incident.summary
+    query = payload.query or incident.summary
     with METRICS.investigation():
         try:
             return GroundedAgent(KNOWLEDGE, LLM).investigate(query, incident)
         except Exception as exc:
-            raise HTTPException(status_code=503, detail=f"Local model unavailable: {exc}") from exc
+            LOGGER.warning(
+                "Model unavailable request_id=%s",
+                getattr(request.state, "request_id", "unknown"),
+                exc_info=exc,
+            )
+            raise HTTPException(status_code=503, detail="Local model unavailable") from exc
 
 
 @app.post("/v1/baselines/deterministic")

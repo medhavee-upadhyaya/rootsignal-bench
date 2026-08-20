@@ -167,6 +167,7 @@ The benchmark emits JSON containing latency percentiles, throughput, errors, and
 
 - Structured evidence and bounded tool budgets
 - Input validation and tool allowlists
+- Correlation IDs, structured errors, security headers, and configurable rate limiting
 - OpenTelemetry spans and Prometheus-compatible metrics endpoint
 - Health/readiness endpoints
 - Container image, Compose stack, and Kubernetes manifests
