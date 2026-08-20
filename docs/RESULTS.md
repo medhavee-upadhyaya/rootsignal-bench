@@ -82,6 +82,12 @@ hardware, seed, split, configuration, and runtime metadata. The clean
 [Colab notebook](../notebooks/rootsignal_gpu_training.ipynb) reproduces the run.
 Training loss alone is not claimed as proof of downstream improvement.
 
-GPU inference remains unmeasured. Publishing it requires a dataset
-digest, split, seed, base-model revision, training metrics, hardware manifest,
-and before/after held-out evaluation.
+A streaming vLLM 0.27.1 inference sweep was also measured on a Tesla T4 using
+the same pinned Qwen model revision in float16. Across 80 requests, all requests
+succeeded. At concurrency 8, output throughput reached `1,019.214 tokens/s`,
+p95 TTFT was `53.682ms`, and p95 end-to-end latency was `434.991ms`. The full
+[machine-readable sweep](../benchmarks/results/vllm-t4-qwen2.5-0.5b.json),
+[hardware/software evidence](../results/gpu/inference-evidence.json), and clean
+[Colab notebook](../notebooks/rootsignal_vllm_benchmark.ipynb) disclose the
+protocol and environment. These are specific T4 measurements, not universal
+performance claims.

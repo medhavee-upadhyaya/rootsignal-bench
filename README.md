@@ -191,7 +191,7 @@ python -m benchmarks.inference \
   --output work/vllm-result.json
 ```
 
-It records TTFT, end-to-end percentiles, request and output-token throughput, failures, warmups, concurrency, model/runtime settings, hardware, and SLO results. It exits nonzero when a gate fails. Compare matching runs with `python -m benchmarks.compare baseline.json candidate.json`. See [the inference benchmark protocol](docs/INFERENCE_BENCHMARK.md). Publish hardware-specific results rather than universal performance claims.
+It records TTFT, end-to-end percentiles, request and output-token throughput, failures, warmups, concurrency, model/runtime settings, hardware, and SLO results. It exits nonzero when a gate fails. Compare matching runs with `python -m benchmarks.compare baseline.json candidate.json`. A measured Tesla T4 vLLM sweep is published in [benchmarks/results/](benchmarks/results/) with exact environment evidence and a [reproducible Colab notebook](notebooks/rootsignal_vllm_benchmark.ipynb). See [the inference benchmark protocol](docs/INFERENCE_BENCHMARK.md). Publish hardware-specific results rather than universal performance claims.
 
 ## Production posture
 
@@ -220,7 +220,8 @@ For deployment, `docker compose up --build` runs the complete web and API stack.
 - [ ] Hosted-model and local-model scorecards
 - [x] Reproducible LoRA GPU training evidence with validated manifests
 - [ ] Public LoRA adapter weights and downstream ablations
-- [ ] GPU inference results across quantization and batch configurations
+- [x] Measured vLLM Tesla T4 concurrency sweep with TTFT and throughput
+- [ ] GPU inference matrix across additional quantization and batch configurations
 - [ ] Community leaderboard with signed result manifests
 
 See [measured results](docs/RESULTS.md), the [architecture decision record](docs/ARCHITECTURE.md), and the [threat model](docs/THREAT_MODEL.md) before interpreting scores.

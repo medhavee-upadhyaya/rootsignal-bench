@@ -39,4 +39,8 @@ python -m benchmarks.compare work/baseline.json work/candidate.json
 - Do not treat laptop llama.cpp measurements as vLLM/GPU results.
 - Do not commit model weights, credentials, or machine-specific endpoints.
 
-No GPU result is checked into this repository until it has been measured on the disclosed hardware. The existing Qwen3 laptop scorecard is a model-quality baseline, not a vLLM performance claim.
+A measured Tesla T4 result is checked in at
+[`benchmarks/results/vllm-t4-qwen2.5-0.5b.json`](../benchmarks/results/vllm-t4-qwen2.5-0.5b.json).
+It discloses the exact model revision, vLLM version, dtype, request protocol,
+hardware, latency, TTFT, throughput, and failures. The existing Qwen3 laptop
+scorecard remains a model-quality baseline, not a vLLM performance claim.
