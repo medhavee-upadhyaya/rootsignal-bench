@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "recorded_at_utc": "2026-08-20T04:14:23Z",
+  "source_commit": "c60917c2b89d44c814eff35cc230567b60dbaa89",
+  "hardware": {
+    "accelerator": "Tesla T4",
+    "gpu_uuid": "GPU-6e7d2e85-665e-5851-79b5-a5f11957763f",
+    "memory_mib": 15360,
+    "driver_version": "580.82.07",
+    "cuda_version": "13.0",
+    "environment": "Google Colab",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.35",
+    "python": "3.12.13"
+  },
+  "training_wall_seconds": 32.448,
+  "training_manifest": "training-manifest.json",
+  "dataset_manifest": "dataset-manifest.json",
+  "notes": [
+    "The dataset was split by incident template with zero incident overlap.",
+    "Training loss is not presented as proof of downstream quality improvement.",
+    "The adapter digest identifies the generated adapter; adapter weights are not committed in this result."
+  ]
+}

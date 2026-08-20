@@ -170,7 +170,7 @@ python -m training.build_dataset --fixtures fixtures/incidents --output work/too
 python -m training.train_lora --dataset work/tool_calls.jsonl --model <base-model>
 ```
 
-The optional training command requires the `train` dependency group and a CUDA-capable environment. It records the base model, seed, dataset digest, configuration, and adapter output. See [docs/MODEL_CARD.md](docs/MODEL_CARD.md).
+The optional training command requires the `train` dependency group and a CUDA-capable environment. It records the base model, seed, dataset digest, configuration, and adapter output. A validated Tesla T4 run, including exact model revision, held-out loss, hardware metadata, and artifact hashes, is published in [results/gpu/](results/gpu/) with a clean [Colab notebook](notebooks/rootsignal_gpu_training.ipynb). See [docs/MODEL_CARD.md](docs/MODEL_CARD.md).
 
 ## Inference performance
 
@@ -218,7 +218,8 @@ For deployment, `docker compose up --build` runs the complete web and API stack.
 - [x] Evaluation, artifact-validated training pipeline, streaming inference benchmark, and deployment stack
 - [ ] 50 human-reviewed benchmark incidents across five failure classes
 - [ ] Hosted-model and local-model scorecards
-- [ ] Public LoRA adapter with ablations
+- [x] Reproducible LoRA GPU training evidence with validated manifests
+- [ ] Public LoRA adapter weights and downstream ablations
 - [ ] GPU inference results across quantization and batch configurations
 - [ ] Community leaderboard with signed result manifests
 

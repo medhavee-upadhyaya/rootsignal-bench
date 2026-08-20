@@ -1,0 +1,38 @@
+{
+  "adapter_sha256": "a96a6803420bcb46a77f1f3e403fc2e5253cd2e00835dc01add7b0c167f25c4f",
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "base_model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "config_sha256": "be100cb08198e60e0bd99f0173c3f3301bf6a67defbdf1329562f8ff3b77fa32",
+  "dataset": "None",
+  "dataset_sha256": "f856125b133b263153bbfa689297dfd5b6ab405a87e9a35814df13da745b615c",
+  "epochs": 3.0,
+  "eval_examples": 4,
+  "eval_metrics": {
+    "eval_loss": 1.9810117483139038,
+    "eval_runtime": 0.2329,
+    "eval_samples_per_second": 17.176,
+    "eval_steps_per_second": 4.294
+  },
+  "lora": {
+    "alpha": 32,
+    "dropout": 0.05,
+    "rank": 16,
+    "targets": "all-linear"
+  },
+  "runtime": {
+    "device": "cuda:0",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.35",
+    "python": "3.12.13"
+  },
+  "schema_version": "3",
+  "seed": 17,
+  "split_isolation": "incident_template",
+  "train_examples": 16,
+  "train_metrics": {
+    "total_flos": 17126184929280.0,
+    "train_loss": 2.602356274922689,
+    "train_runtime": 10.0844,
+    "train_samples_per_second": 4.76,
+    "train_steps_per_second": 0.297
+  }
+}

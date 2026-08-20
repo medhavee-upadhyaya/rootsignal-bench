@@ -69,7 +69,19 @@ testing for tools, evidence transport, evaluation, and API behavior.
 
 ## Fine-tuning and GPU inference
 
-The repository contains executable LoRA and concurrency benchmark pipelines,
-but no adapter or GPU result is claimed yet. Publishing one requires a dataset
+A LoRA tool-selector training run was measured on a Google Colab Tesla T4
+(15,360 MiB) against source commit `c60917c2b89d44c814eff35cc230567b60dbaa89`.
+Qwen2.5-0.5B-Instruct revision `7ae557604adf67be50417f59c2c2f167def9a775`
+trained for three epochs on 16 examples and evaluated on four incident-template-
+isolated examples. Training loss was `2.6024`, held-out loss was `1.9810`, and
+the measured training runtime was `10.0844s` (`32.448s` end-to-end wall time).
+The validated [evidence](../results/gpu/training-evidence.json),
+[training manifest](../results/gpu/training-manifest.json), and
+[dataset manifest](../results/gpu/dataset-manifest.json) disclose hashes,
+hardware, seed, split, configuration, and runtime metadata. The clean
+[Colab notebook](../notebooks/rootsignal_gpu_training.ipynb) reproduces the run.
+Training loss alone is not claimed as proof of downstream improvement.
+
+GPU inference remains unmeasured. Publishing it requires a dataset
 digest, split, seed, base-model revision, training metrics, hardware manifest,
 and before/after held-out evaluation.

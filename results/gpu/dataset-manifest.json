@@ -1,0 +1,25 @@
+{
+  "eval": {
+    "examples": 4,
+    "incident_ids": ["auth-certificate-001"],
+    "path": "eval.jsonl",
+    "sha256": "a2789b63314e65d331527ad5764116946fb2d79fac26915f9ba7786549427dbe"
+  },
+  "eval_fraction": 0.2,
+  "incident_overlap": false,
+  "schema_version": "2",
+  "seed": 17,
+  "source_sha256": "c8407ec45147e3a46f45220e607ded1e40c18a137c4d357f9101ae71a56575e8",
+  "split_unit": "incident_template",
+  "train": {
+    "examples": 16,
+    "incident_ids": [
+      "catalog-memory-001",
+      "checkout-latency-001",
+      "payments-queue-001",
+      "search-cache-001"
+    ],
+    "path": "train.jsonl",
+    "sha256": "615d76816647647931e70e48ba562595740cdab30b336623332e5880ecae63b4"
+  }
+}
