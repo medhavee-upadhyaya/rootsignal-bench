@@ -37,6 +37,10 @@ An acceptable incident has a single defensible cause, at least one distractor, a
 
 Evaluation schema v3 reports aggregate uncertainty and scores sliced by declared failure class and difficulty. A slice containing one fixture is descriptive only and must not be interpreted as a stable population estimate.
 
+## End-to-end contract
+
+The CI suite installs the real API dependency group and must not silently skip API coverage. `tests/test_full_stack.py` sends a request through the ASGI application and real OpenAI-compatible client contract using a deterministic in-process provider. The test covers model planning, bounded tool execution, persistent retrieval, evidence citations, token accounting, observability, correlation headers, and structured provider-failure handling. It does not claim model quality; live-model capability remains a separately measured result.
+
 ## Baseline disclosure
 
 The deterministic baseline uses the oracle to test plumbing and rubric behavior. Its root-cause score is not an agent capability result. Any published model score must use an adapter that receives only public observations.

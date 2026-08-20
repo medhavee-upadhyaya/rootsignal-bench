@@ -204,6 +204,7 @@ It records TTFT, end-to-end percentiles, request and output-token throughput, fa
 - Container image, Compose stack, and Kubernetes manifests
 - Non-root API and web images, persistent data, safe rollouts, autoscaling, SBOMs, and provenance
 - CI tests, evaluation regression gate, dependency review, and image build
+- Credential-free end-to-end provider test across API, agent, tools, RAG, citations, and telemetry
 - Explicit threat model and documented limitations
 
 The observability contract intentionally separates service health from model quality: HTTP and latency SLOs detect availability problems, while citation and planner-fallback metrics detect degraded agent behavior. See [production observability and runbooks](docs/OBSERVABILITY.md).
