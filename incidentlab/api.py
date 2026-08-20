@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import os
 import json
 import logging
+import os
+import time
 from pathlib import Path
 
 try:
@@ -18,7 +19,7 @@ from .fixtures import load_incident
 from .http import RateLimiter, request_id
 from .knowledge import KnowledgeBase
 from .llm import OllamaClient
-from .observability import METRICS
+from .observability import METRICS, log_event, trace_span
 from .rag_agent import GroundedAgent
 
 FIXTURE_ROOT = Path(os.getenv("INCIDENTLAB_FIXTURES", "fixtures/incidents")).resolve()
@@ -43,6 +44,7 @@ def _error(code: str, message: str, correlation_id: str) -> dict[str, object]:
 
 @app.middleware("http")
 async def harden_http(request: Request, call_next):
+    started = time.perf_counter()
     correlation_id = request_id(request.headers.get("x-request-id"))
     request.state.request_id = correlation_id
     if request.url.path in RATE_LIMITED_PATHS:
@@ -64,6 +66,18 @@ async def harden_http(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cache-Control"] = "no-store"
+    METRICS.record_http(
+        request.method, request.url.path, response.status_code, time.perf_counter() - started
+    )
+    log_event(
+        LOGGER,
+        "http_request",
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+        duration_ms=round((time.perf_counter() - started) * 1000, 3),
+        request_id=correlation_id,
+    )
     return response
 
 
@@ -129,13 +143,18 @@ def health() -> dict[str, str]:
 
 
 @app.get("/readyz")
-def readiness() -> dict[str, object]:
-    return {
-        "status": "ready" if FIXTURE_ROOT.exists() and LLM.healthy() else "not_ready",
+def readiness():
+    model_server = LLM.healthy()
+    ready = FIXTURE_ROOT.exists() and model_server
+    content = {
+        "status": "ready" if ready else "not_ready",
         "model": LLM.model,
-        "model_server": LLM.healthy(),
+        "model_server": model_server,
         "knowledge": KNOWLEDGE.stats(),
     }
+    if not ready:
+        return JSONResponse(status_code=503, content=content)
+    return content
 
 
 @app.get("/v1/system")
@@ -173,7 +192,22 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
     query = payload.query or incident.summary
     with METRICS.investigation():
         try:
-            return GroundedAgent(KNOWLEDGE, LLM).investigate(query, incident)
+            with trace_span(
+                "rootsignal.investigate",
+                {"rootsignal.incident_id": incident.incident_id, "rootsignal.model": LLM.model},
+            ):
+                result = GroundedAgent(KNOWLEDGE, LLM).investigate(query, incident)
+            run = result.get("run", {})
+            if isinstance(run, dict):
+                METRICS.record_agent_run(run)
+            log_event(
+                LOGGER,
+                "investigation_completed",
+                incident_id=incident.incident_id,
+                request_id=getattr(request.state, "request_id", "unknown"),
+                run=run,
+            )
+            return result
         except Exception as exc:
             LOGGER.warning(
                 "Model unavailable request_id=%s",

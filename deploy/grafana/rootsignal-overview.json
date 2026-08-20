@@ -1,0 +1,58 @@
+{
+  "title": "RootSignal Production Overview",
+  "uid": "rootsignal-overview",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "tags": ["rootsignal", "llm", "rag"],
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate",
+      "type": "timeseries",
+      "targets": [{"expr": "sum by (route) (rate(rootsignal_http_requests_total[5m]))"}],
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "5xx percentage",
+      "type": "timeseries",
+      "targets": [{"expr": "100 * sum(rate(rootsignal_http_requests_total{status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(rootsignal_http_requests_total[5m])), 0.001)"}],
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "Investigation latency p50 / p95",
+      "type": "timeseries",
+      "targets": [
+        {"legendFormat": "p50", "expr": "histogram_quantile(0.50, sum by (le) (rate(rootsignal_investigation_duration_seconds_bucket[5m])))"},
+        {"legendFormat": "p95", "expr": "histogram_quantile(0.95, sum by (le) (rate(rootsignal_investigation_duration_seconds_bucket[5m])))"}
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Model token rate",
+      "type": "timeseries",
+      "targets": [
+        {"legendFormat": "prompt", "expr": "rate(rootsignal_model_prompt_tokens_total[5m])"},
+        {"legendFormat": "completion", "expr": "rate(rootsignal_model_completion_tokens_total[5m])"}
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}
+    },
+    {
+      "id": 5,
+      "title": "Grounding failures",
+      "type": "timeseries",
+      "targets": [{"expr": "increase(rootsignal_invalid_citations_total[30m])"}],
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}
+    },
+    {
+      "id": 6,
+      "title": "Planner fallback rate",
+      "type": "timeseries",
+      "targets": [{"expr": "rate(rootsignal_policy_fallback_steps_total[5m])"}],
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}
+    }
+  ]
+}

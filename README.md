@@ -180,10 +180,13 @@ It records TTFT, end-to-end percentiles, request and output-token throughput, fa
 - Input validation and tool allowlists
 - Correlation IDs, structured errors, security headers, and configurable rate limiting
 - OpenTelemetry spans and Prometheus-compatible metrics endpoint
+- Versioned Grafana dashboard, Prometheus alerts, structured JSON events, and grounding signals
 - Health/readiness endpoints
 - Container image, Compose stack, and Kubernetes manifests
 - CI tests, evaluation regression gate, dependency review, and image build
 - Explicit threat model and documented limitations
+
+The observability contract intentionally separates service health from model quality: HTTP and latency SLOs detect availability problems, while citation and planner-fallback metrics detect degraded agent behavior. See [production observability and runbooks](docs/OBSERVABILITY.md).
 
 ## Roadmap
 

@@ -1,0 +1,35 @@
+groups:
+  - name: rootsignal-api
+    rules:
+      - alert: RootSignalHighErrorRate
+        expr: |
+          sum(rate(rootsignal_http_requests_total{status_class=~"5xx"}[5m]))
+          / clamp_min(sum(rate(rootsignal_http_requests_total[5m])), 0.001) > 0.05
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: RootSignal API 5xx rate exceeds 5%
+          runbook: docs/OBSERVABILITY.md#high-error-rate
+      - alert: RootSignalInvestigationLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(rootsignal_investigation_duration_seconds_bucket[10m]))) > 5
+        for: 15m
+        labels: {severity: ticket}
+        annotations:
+          summary: RootSignal investigation p95 exceeds five seconds
+          runbook: docs/OBSERVABILITY.md#high-latency
+      - alert: RootSignalCitationFailures
+        expr: increase(rootsignal_invalid_citations_total[30m]) > 3
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: Grounding quality is degrading
+          runbook: docs/OBSERVABILITY.md#citation-failures
+      - alert: RootSignalFallbackSpike
+        expr: increase(rootsignal_policy_fallback_steps_total[15m]) > 10
+        for: 5m
+        labels: {severity: ticket}
+        annotations:
+          summary: Model planner fallbacks are elevated
+          runbook: docs/OBSERVABILITY.md#planner-fallbacks
