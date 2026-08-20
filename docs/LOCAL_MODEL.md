@@ -13,3 +13,5 @@ python -m evals.live --fixtures fixtures/incidents
 ```
 
 The small development model is expected to fail some reasoning and citation checks. Those failures are the baseline for fine-tuning and model-selection experiments, not defects to hide.
+
+For GPU serving, use the reproducible concurrency sweep and reporting contract in [INFERENCE_BENCHMARK.md](INFERENCE_BENCHMARK.md). The benchmark measures streaming TTFT separately from total latency and refuses an SLO-violating run with a nonzero exit status.

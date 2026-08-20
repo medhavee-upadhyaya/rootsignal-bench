@@ -155,13 +155,24 @@ The optional training command requires the `train` dependency group and a CUDA-c
 
 ## Inference performance
 
-The serving contract is OpenAI-compatible, so the same benchmark can target vLLM or another server:
+The serving contract is OpenAI-compatible. The API load test measures complete investigation requests:
 
 ```bash
 python -m benchmarks.load_test --url http://localhost:8000/v1/investigations --requests 100 --concurrency 8
 ```
 
-The benchmark emits JSON containing latency percentiles, throughput, errors, and run metadata. Publish hardware-specific results rather than universal performance claims.
+The streaming inference benchmark targets vLLM or another compatible model server:
+
+```bash
+python -m benchmarks.inference \
+  --model <model-id> \
+  --model-revision <commit> \
+  --hardware "1x NVIDIA L4 24GB" \
+  --concurrency-sweep 1,2,4,8,16 \
+  --output work/vllm-result.json
+```
+
+It records TTFT, end-to-end percentiles, request and output-token throughput, failures, warmups, concurrency, model/runtime settings, hardware, and SLO results. It exits nonzero when a gate fails. Compare matching runs with `python -m benchmarks.compare baseline.json candidate.json`. See [the inference benchmark protocol](docs/INFERENCE_BENCHMARK.md). Publish hardware-specific results rather than universal performance claims.
 
 ## Production posture
 
