@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "audit-sampling-001",
+  "title": "Audit events missing",
+  "summary": "security audit volume dropped after a logging configuration deployment",
+  "metadata": {
+    "failure_class": "sampling-misconfiguration",
+    "difficulty": "easy",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "audit.events": "18000/min before; 180/min after",
+      "application.requests": "stable",
+      "logger.errors": "0"
+    },
+    "logs": [
+      "audit-agent INFO sampling_rate=0.01",
+      "security-pipeline INFO input volume low"
+    ],
+    "deployments": [
+      "audit sampling changed 1.0 -> 0.01 at 06:00Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "telemetry-sampling",
+      "title": "Excessive audit sampling",
+      "content": "A proportional audit-volume drop after sampling changes requires restoring mandatory-event capture."
+    }
+  ],
+  "oracle": {
+    "root_cause": "Audit sampling was reduced to 1%, dropping required security events.",
+    "required_evidence": [
+      "events 18000 180",
+      "requests stable",
+      "sampling_rate 0.01",
+      "sampling 1.0 0.01"
+    ],
+    "remediation": [
+      "Restore full audit capture",
+      "Backfill where possible",
+      "Protect mandatory event settings"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

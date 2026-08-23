@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "stream-partition-001",
+  "title": "Stream processing uneven",
+  "summary": "one event-stream partition accumulated lag while others remained current",
+  "metadata": {
+    "failure_class": "partition-hotspot",
+    "difficulty": "medium",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "stream.partition_7_lag": "120 before; 9.2M after",
+      "stream.other_lag": "below 300",
+      "stream.consumer_cpu": "one pod 100%"
+    },
+    "logs": [
+      "consumer WARN partition=7 processing key=global",
+      "producer INFO routing_key=global"
+    ],
+    "deployments": [
+      "producer v2 changed missing customer IDs to constant key global"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "partitioning",
+      "title": "Hot partition",
+      "content": "Single-partition lag indicates skewed keys. Restore high-cardinality routing and redistribute the backlog."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A producer change routed missing customer IDs to the constant global key, overloading partition 7.",
+    "required_evidence": [
+      "partition 7 lag 9.2M",
+      "other lag below 300",
+      "routing key global",
+      "one pod 100%"
+    ],
+    "remediation": [
+      "Restore distributed routing keys",
+      "Repartition backlog",
+      "Alert on per-partition skew"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

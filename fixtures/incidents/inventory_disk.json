@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "inventory-disk-001",
+  "title": "Inventory writes failing",
+  "summary": "inventory-db writes began failing while read traffic remained healthy",
+  "metadata": {
+    "failure_class": "disk-exhaustion",
+    "difficulty": "medium",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "inventory.disk_used": "71% before 08:00Z; 100% at 08:42Z",
+      "inventory.write_errors": "0 before; 620/min after",
+      "inventory.read_latency": "stable at 18ms"
+    },
+    "logs": [
+      "inventory-db ERROR no space left on device writing WAL",
+      "backup-agent INFO snapshot retention count=96"
+    ],
+    "deployments": [
+      "backup-agent retention changed from 14 to 90 snapshots at 07:55Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "disk-capacity",
+      "title": "Database disk exhaustion",
+      "content": "When database writes fail with no space left, inspect retained snapshots and disk growth. Remove safe obsolete snapshots and restore retention limits."
+    }
+  ],
+  "oracle": {
+    "root_cause": "Excess backup snapshots filled the inventory database disk, preventing WAL writes.",
+    "required_evidence": [
+      "disk 71% 100%",
+      "write errors 0 620",
+      "no space left",
+      "retention 14 90"
+    ],
+    "remediation": [
+      "Remove obsolete snapshots",
+      "Restore retention to 14",
+      "Alert on disk capacity"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

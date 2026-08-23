@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "recommendations-gpu-001",
+  "title": "Recommendations latency spike",
+  "summary": "recommendation inference shifted to CPU despite healthy request volume",
+  "metadata": {
+    "failure_class": "accelerator-fallback",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "recs.p95": "85ms before; 3400ms after",
+      "recs.gpu_util": "72% before; 0% after",
+      "recs.cpu": "18% before; 940% after"
+    },
+    "logs": [
+      "inference WARN CUDA provider unavailable; using CPU",
+      "device-plugin ERROR allocation denied"
+    ],
+    "deployments": [
+      "GPU device plugin upgraded at 16:20Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "accelerator-runtime",
+      "title": "Accelerator fallback",
+      "content": "A GPU utilization collapse with CPU saturation indicates accelerator fallback. Restore device allocation before scaling CPU replicas."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A device-plugin upgrade prevented GPU allocation and forced recommendation inference onto CPU.",
+    "required_evidence": [
+      "p95 85ms 3400ms",
+      "GPU 72% 0%",
+      "CPU 940%",
+      "CUDA unavailable"
+    ],
+    "remediation": [
+      "Roll back device plugin",
+      "Restore GPU allocation",
+      "Alert on inference provider fallback"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

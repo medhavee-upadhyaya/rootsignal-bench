@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "search-index-001",
+  "title": "New products absent from search",
+  "summary": "search queries succeeded but recently added products never appeared",
+  "metadata": {
+    "failure_class": "indexing-pipeline",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "indexer.events_consumed": "5200/min before; 0 after",
+      "search.query_success": "99.9%",
+      "index.freshness": "20s before; 3h after"
+    },
+    "logs": [
+      "indexer ERROR permission denied reading products topic",
+      "search-api INFO queries healthy"
+    ],
+    "deployments": [
+      "service account role consumer removed at 18:02Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "indexing",
+      "title": "Indexer permission failure",
+      "content": "When search stays healthy but freshness degrades, inspect ingestion offsets and permissions rather than query serving."
+    }
+  ],
+  "oracle": {
+    "root_cause": "The indexer service account lost consumer permission and stopped reading product events.",
+    "required_evidence": [
+      "consumed 0",
+      "freshness 3h",
+      "permission denied",
+      "role removed"
+    ],
+    "remediation": [
+      "Restore consumer role",
+      "Replay product events",
+      "Alert on index freshness"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

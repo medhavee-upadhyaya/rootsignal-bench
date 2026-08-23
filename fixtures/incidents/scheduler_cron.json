@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "scheduler-cron-001",
+  "title": "Daily settlement missing",
+  "summary": "the daily settlement job stopped running after a timezone configuration change",
+  "metadata": {
+    "failure_class": "scheduler-timezone",
+    "difficulty": "medium",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "settlement.runs": "1/day before; 0 for 2 days",
+      "scheduler.healthy": "true",
+      "settlement.queue": "empty"
+    },
+    "logs": [
+      "scheduler INFO next_run=Sunday 02:00 local",
+      "scheduler WARN local time 02:00 does not exist"
+    ],
+    "deployments": [
+      "scheduler timezone changed UTC -> America/Los_Angeles before DST transition"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "scheduling",
+      "title": "DST scheduling gap",
+      "content": "Jobs scheduled in local wall time can be skipped at DST transitions. Use UTC or a scheduler with explicit missed-run policy."
+    }
+  ],
+  "oracle": {
+    "root_cause": "The settlement cron moved to local 02:00, a nonexistent time during the DST transition.",
+    "required_evidence": [
+      "runs 0 for 2 days",
+      "scheduler healthy",
+      "02:00 does not exist",
+      "timezone UTC local"
+    ],
+    "remediation": [
+      "Schedule in UTC",
+      "Backfill settlements",
+      "Add missed-run alert"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

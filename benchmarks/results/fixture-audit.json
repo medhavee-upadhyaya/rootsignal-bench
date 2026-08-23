@@ -1,0 +1,59 @@
+{
+  "schema_version": "1",
+  "fixture_count": 26,
+  "checks": {
+    "fixtures_present": true,
+    "unique_incident_ids": true,
+    "unique_public_observations": true,
+    "no_exact_oracle_leakage": true,
+    "required_evidence_grounded": true,
+    "expected_tools_recognized": true,
+    "all_synthetic": true,
+    "failure_classes_declared": true,
+    "difficulty_levels_covered": true,
+    "difficulty_declared": true,
+    "licenses_declared": true
+  },
+  "passed": true,
+  "failure_classes": {
+    "accelerator-fallback": 1,
+    "cache-capacity": 1,
+    "certificate-expiry": 1,
+    "circuit-breaker-stuck": 1,
+    "clock-skew": 1,
+    "database-deadlock": 1,
+    "database-saturation": 1,
+    "disk-exhaustion": 1,
+    "dns-misconfiguration": 1,
+    "feature-flag-scope": 1,
+    "file-descriptor-leak": 1,
+    "indexing-pipeline": 1,
+    "memory-leak": 1,
+    "missing-backpressure": 1,
+    "network-packet-loss": 1,
+    "partial-write": 1,
+    "partition-hotspot": 1,
+    "provider-quota": 1,
+    "proxy-timeout": 1,
+    "queue-backlog": 1,
+    "replication-lag": 1,
+    "sampling-misconfiguration": 1,
+    "scheduler-timezone": 1,
+    "schema-migration": 1,
+    "thread-pool-exhaustion": 1,
+    "ttl-misconfiguration": 1
+  },
+  "difficulties": {
+    "easy": 6,
+    "hard": 10,
+    "medium": 10
+  },
+  "licenses": {
+    "CC0-1.0": 26
+  },
+  "duplicate_ids": [],
+  "duplicate_public_observations": [],
+  "exact_oracle_leaks": [],
+  "ungrounded_evidence": {},
+  "unknown_expected_tools": {}
+}

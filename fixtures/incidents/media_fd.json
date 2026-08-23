@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "media-fd-001",
+  "title": "Media uploads unavailable",
+  "summary": "media-api stopped accepting uploads after several days of stable traffic",
+  "metadata": {
+    "failure_class": "file-descriptor-leak",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "media.open_fds": "820 after restart; 65535 before failure",
+      "media.upload_failure": "0% before; 96% after",
+      "media.memory": "stable"
+    },
+    "logs": [
+      "media-api ERROR too many open files",
+      "media-api INFO upload stream cleanup skipped on client disconnect"
+    ],
+    "deployments": [
+      "media-api v6.1 deployed four days earlier with streaming upload refactor"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "resource-leak",
+      "title": "File descriptor exhaustion",
+      "content": "Monotonic descriptor growth ending at the process limit indicates leaked handles. Roll back the leaking path and close streams on every exit."
+    }
+  ],
+  "oracle": {
+    "root_cause": "The v6.1 upload path leaked file descriptors when clients disconnected.",
+    "required_evidence": [
+      "open fds 820 65535",
+      "upload failure 96%",
+      "too many open files",
+      "cleanup skipped"
+    ],
+    "remediation": [
+      "Roll back v6.1",
+      "Close streams on disconnect",
+      "Alert on descriptor growth"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

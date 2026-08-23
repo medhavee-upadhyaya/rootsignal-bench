@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "gateway-packetloss-001",
+  "title": "Intermittent gateway failures",
+  "summary": "edge-gateway requests failed only in one availability zone",
+  "metadata": {
+    "failure_class": "network-packet-loss",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "gateway.az3_error": "0.3% before; 24% after",
+      "gateway.az1_error": "0.2% stable",
+      "az3.packet_loss": "0% before; 17% after"
+    },
+    "logs": [
+      "gateway WARN upstream reset in az3",
+      "network-agent WARN interface rx_dropped increasing"
+    ],
+    "deployments": [
+      "az3 network policy updated MTU 1500 -> 9000"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "network-path",
+      "title": "Packet loss in one zone",
+      "content": "Zone-specific resets and dropped packets require comparing network path configuration such as MTU before changing application timeouts."
+    }
+  ],
+  "oracle": {
+    "root_cause": "An MTU change to 9000 in az3 caused fragmentation loss and intermittent gateway resets.",
+    "required_evidence": [
+      "az3 error 24%",
+      "packet loss 17%",
+      "rx_dropped",
+      "MTU 1500 9000"
+    ],
+    "remediation": [
+      "Restore MTU 1500",
+      "Recycle affected network agents",
+      "Alert on packet loss by zone"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

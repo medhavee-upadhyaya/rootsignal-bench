@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "geo-circuit-001",
+  "title": "Geocoding permanently degraded",
+  "summary": "geocoding stayed on fallback responses after a brief provider recovery",
+  "metadata": {
+    "failure_class": "circuit-breaker-stuck",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "geo.primary_success": "recovered to 99%",
+      "geo.fallback_rate": "100% for 4h",
+      "geo.breaker_state": "open"
+    },
+    "logs": [
+      "geo-client WARN circuit open; request rejected",
+      "provider-monitor INFO primary healthy"
+    ],
+    "deployments": [
+      "geo-client v2.3 changed breaker probe interval 30s -> 0"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "resilience-policy",
+      "title": "Circuit breaker never probes",
+      "content": "A breaker that remains open after dependency recovery needs a nonzero half-open probe policy."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A zero-second-disabled probe configuration prevented the geocoding circuit breaker from testing recovery.",
+    "required_evidence": [
+      "primary recovered 99%",
+      "fallback 100%",
+      "breaker open",
+      "probe 30s 0"
+    ],
+    "remediation": [
+      "Restore probe interval",
+      "Reset circuit breaker",
+      "Alert on prolonged open state"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

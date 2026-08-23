@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "profile-dns-001",
+  "title": "Profile lookup failures",
+  "summary": "profile-api could not resolve the identity service after a DNS rollout",
+  "metadata": {
+    "failure_class": "dns-misconfiguration",
+    "difficulty": "easy",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "profile.lookup_failure": "0.1% before; 78% after 11:05Z",
+      "dns.nxdomain_rate": "2/min before; 7400/min after",
+      "profile.cpu": "normal at 26%"
+    },
+    "logs": [
+      "profile-api ERROR lookup identity.svc NXDOMAIN",
+      "coredns INFO serving other zones normally"
+    ],
+    "deployments": [
+      "service record identity.svc renamed to identity-api.svc at 11:03Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "dns-resolution",
+      "title": "Service DNS failure",
+      "content": "For a concentrated NXDOMAIN spike, compare service records and client names. Restore the compatible record and verify resolver caches."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A DNS rollout removed the identity.svc record still used by profile-api.",
+    "required_evidence": [
+      "NXDOMAIN 7400",
+      "lookup failure 78%",
+      "identity.svc renamed",
+      "CPU normal"
+    ],
+    "remediation": [
+      "Restore identity.svc alias",
+      "Update profile-api configuration",
+      "Alert on NXDOMAIN rate"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

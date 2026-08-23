@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "notifications-quota-001",
+  "title": "Notifications not delivered",
+  "summary": "notification sends failed abruptly while internal queues and workers remained healthy",
+  "metadata": {
+    "failure_class": "provider-quota",
+    "difficulty": "easy",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "notify.delivery_success": "99.8% before; 3% after",
+      "notify.queue_depth": "stable at 240",
+      "notify.worker_cpu": "22%"
+    },
+    "logs": [
+      "notify-worker ERROR provider response 429 quota exceeded",
+      "notify-worker INFO retry-after=3600"
+    ],
+    "deployments": [
+      "monthly messaging quota lowered from 20M to 2M at provider account"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "external-quota",
+      "title": "Provider quota exhaustion",
+      "content": "For provider 429 responses with healthy workers, verify account quota and usage before changing internal capacity."
+    }
+  ],
+  "oracle": {
+    "root_cause": "The messaging provider quota was reduced to 2M and exhausted, causing notification 429 responses.",
+    "required_evidence": [
+      "delivery 99.8% 3%",
+      "provider 429",
+      "queue stable",
+      "quota 20M 2M"
+    ],
+    "remediation": [
+      "Restore provider quota",
+      "Throttle noncritical notifications",
+      "Alert on quota consumption"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

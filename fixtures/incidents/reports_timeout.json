@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "reports-timeout-001",
+  "title": "Reports fail at one minute",
+  "summary": "report generation consistently terminated after exactly 60 seconds",
+  "metadata": {
+    "failure_class": "proxy-timeout",
+    "difficulty": "easy",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "reports.duration": "55-180s expected",
+      "reports.failure": "0 before; 48% after",
+      "proxy.termination": "exactly 60s"
+    },
+    "logs": [
+      "proxy WARN upstream timed out after 60s",
+      "reports-api INFO job continued after client disconnect"
+    ],
+    "deployments": [
+      "ingress timeout changed 300s -> 60s"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "proxy-configuration",
+      "title": "Ingress timeout",
+      "content": "Failures at an exact boundary point to a proxy timeout. Restore a safe limit or move long work to asynchronous jobs."
+    }
+  ],
+  "oracle": {
+    "root_cause": "The ingress timeout was reduced to 60 seconds, terminating valid long-running reports.",
+    "required_evidence": [
+      "failure 48%",
+      "exactly 60s",
+      "upstream timed out",
+      "timeout 300s 60s"
+    ],
+    "remediation": [
+      "Restore safe timeout",
+      "Move reports asynchronous",
+      "Alert on proxy terminations"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

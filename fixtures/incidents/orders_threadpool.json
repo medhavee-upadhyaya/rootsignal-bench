@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "id": "orders-threadpool-001",
+  "title": "Orders requests timing out",
+  "summary": "orders-api latency rose while CPU and database utilization stayed normal",
+  "metadata": {
+    "failure_class": "thread-pool-exhaustion",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "orders.p95": "190ms before; 6200ms after",
+      "orders.worker_active": "32 of 32",
+      "orders.queue_wait": "12ms before; 5800ms after",
+      "orders.cpu": "34%"
+    },
+    "logs": [
+      "orders-api WARN worker queue depth=4100",
+      "shipping-client WARN call blocked for 30s"
+    ],
+    "deployments": [
+      "orders-api v4.2 changed shipping client timeout 2s -> 30s"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "thread-pool",
+      "title": "Blocked worker pool",
+      "content": "When all workers are active and queue wait rises with normal CPU, inspect blocking downstream calls and timeout changes."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A 30-second shipping client timeout blocked all orders-api workers and exhausted the request pool.",
+    "required_evidence": [
+      "p95 190ms 6200ms",
+      "worker 32 of 32",
+      "queue wait 5800ms",
+      "timeout 2s 30s"
+    ],
+    "remediation": [
+      "Restore 2-second timeout",
+      "Add bulkhead for shipping calls",
+      "Alert on worker queue wait"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

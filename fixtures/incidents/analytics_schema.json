@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "analytics-schema-001",
+  "title": "Analytics ingestion stalled",
+  "summary": "analytics writers failed immediately after a database migration",
+  "metadata": {
+    "failure_class": "schema-migration",
+    "difficulty": "medium",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "analytics.ingest_rate": "44000/min before; 0 after",
+      "analytics.db_errors": "0 before; 18000/min after",
+      "analytics.queue_depth": "90 before; 290000 after"
+    },
+    "logs": [
+      "analytics-writer ERROR column event_type does not exist",
+      "migration INFO renamed event_type to kind"
+    ],
+    "deployments": [
+      "migration 2026_08_rename_event_type completed before writer rollout"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "migration-compatibility",
+      "title": "Schema compatibility failure",
+      "content": "When writers fail after a rename, restore backward compatibility or deploy readers and writers in a safe expand-contract sequence."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A migration renamed event_type before compatible analytics writers were deployed.",
+    "required_evidence": [
+      "ingest rate 0",
+      "db errors 18000",
+      "column event_type missing",
+      "renamed to kind"
+    ],
+    "remediation": [
+      "Add compatibility column",
+      "Deploy compatible writers",
+      "Drain ingestion queue"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

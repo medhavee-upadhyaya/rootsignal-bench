@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "sessions-redis-001",
+  "title": "Sessions unexpectedly expire",
+  "summary": "users were logged out minutes after a session-cache rollout",
+  "metadata": {
+    "failure_class": "ttl-misconfiguration",
+    "difficulty": "easy",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "session.active": "1.8M before; 120K after",
+      "session.expiry_rate": "400/min before; 42000/min after",
+      "redis.memory": "normal"
+    },
+    "logs": [
+      "session-api INFO session key missing",
+      "redis INFO expired_keys spike"
+    ],
+    "deployments": [
+      "session TTL changed 24h -> 5m at 12:00Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "cache-ttl",
+      "title": "Incorrect cache TTL",
+      "content": "A sharp expiration increase after a TTL change requires restoring the intended lifetime and validating units."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A rollout reduced session TTL from 24 hours to 5 minutes, expiring active sessions.",
+    "required_evidence": [
+      "active 1.8M 120K",
+      "expiry 42000",
+      "session key missing",
+      "TTL 24h 5m"
+    ],
+    "remediation": [
+      "Restore 24-hour TTL",
+      "Notify affected users",
+      "Test configuration units"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

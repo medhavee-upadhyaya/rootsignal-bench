@@ -2,6 +2,12 @@
 
 RootSignal Bench measures investigation behavior rather than stylistic similarity.
 
+The public corpus contains 26 synthetic incidents spanning 26 failure classes:
+6 easy, 10 medium, and 10 hard. Each fixture is licensed CC0-1.0 and carries a
+separate oracle that is excluded from model context. The machine-readable
+[fixture audit](../benchmarks/results/fixture-audit.json) records the integrity
+checks and corpus distribution.
+
 ## Fixture anatomy
 
 The public observation contains the incident summary, telemetry, runbooks, and distractors. The oracle contains the root cause, required evidence, remediation criteria, and expected tools. Runtime adapters must not place the oracle in the model context. Every fixture also declares its failure class, difficulty, license, and synthetic-data status.
@@ -20,7 +26,7 @@ These weights are versioned. Scores from different schema or rubric versions mus
 
 Fixtures are split by incident template, not only by rendered example. Dataset generation should keep evaluation templates out of training. Public leaderboard submissions must record dataset hashes, model identity, prompt/configuration digest, hardware, and code revision.
 
-`python -m evals.validate_fixtures --fixtures fixtures/incidents` enforces the fixture schema, unique incident IDs, unique public observations, non-empty telemetry/runbooks/oracles, explicit provenance metadata, and absence of an exact root-cause string in the public observation. Exact-string detection is a minimum leakage control, not proof against semantic contamination; proposed fixtures still require review.
+`python -m evals.validate_fixtures --fixtures fixtures/incidents` enforces the fixture schema, unique incident IDs, unique public observations, non-empty telemetry/runbooks/oracles, explicit provenance metadata, recognized expected tools, required-evidence grounding, coverage of all difficulty levels, and absence of an exact root-cause string in the public observation. Exact-string detection is a minimum leakage control, not proof against semantic contamination; proposed fixtures still require review.
 
 ## Adversarial tool-use contract
 

@@ -209,7 +209,7 @@ For deployment, `docker compose up --build` runs the complete web and API stack.
 - [x] Reproducible end-to-end incident and deterministic baseline
 - [x] Typed tools, evidence ledger, retrieval, API, CLI, and regression tests
 - [x] Evaluation, artifact-validated training pipeline, streaming inference benchmark, and deployment stack
-- [ ] 50 human-reviewed benchmark incidents across five failure classes
+- [x] 26 audited synthetic incidents across 26 failure classes
 - [ ] Hosted-model and local-model scorecards
 - [x] Reproducible LoRA GPU training evidence with validated manifests
 - [ ] Public LoRA adapter weights and downstream ablations

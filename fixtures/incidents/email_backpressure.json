@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "email-backpressure-001",
+  "title": "Email API memory rising",
+  "summary": "email-api memory and latency rose as downstream delivery slowed",
+  "metadata": {
+    "failure_class": "missing-backpressure",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "email.memory": "900MiB before; 7.8GiB after",
+      "email.buffered_messages": "200 before; 880000 after",
+      "email.delivery_rate": "12000/min before; 900/min after"
+    },
+    "logs": [
+      "email-api WARN in-memory send buffer growing",
+      "smtp-client WARN downstream response slow"
+    ],
+    "deployments": [
+      "email-api v5.0 removed bounded channel to improve throughput"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "backpressure",
+      "title": "Unbounded producer buffer",
+      "content": "When downstream throughput falls and an in-memory queue grows, enforce bounded buffering and backpressure."
+    }
+  ],
+  "oracle": {
+    "root_cause": "v5.0 removed the bounded email channel, allowing messages to accumulate in memory during SMTP slowdown.",
+    "required_evidence": [
+      "memory 7.8GiB",
+      "buffered 880000",
+      "delivery 900",
+      "bounded channel removed"
+    ],
+    "remediation": [
+      "Restore bounded channel",
+      "Apply producer backpressure",
+      "Persist overflow safely"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "billing-clock-001",
+  "title": "Billing tokens rejected",
+  "summary": "billing-api began rejecting valid service tokens after a node image update",
+  "metadata": {
+    "failure_class": "clock-skew",
+    "difficulty": "medium",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "billing.auth_reject": "0 before; 3100/min after",
+      "node.clock_offset": "2ms before; 420s after",
+      "billing.cpu": "stable"
+    },
+    "logs": [
+      "billing-api ERROR token used before issued",
+      "chronyd WARN no suitable source"
+    ],
+    "deployments": [
+      "node image v9 disabled chronyd at 03:14Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "clock-synchronization",
+      "title": "Clock skew",
+      "content": "Token timing failures with large clock offset indicate time synchronization loss. Restore a trusted time source and rotate affected nodes."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A node image disabled time synchronization, creating 420-second skew and invalidating billing tokens.",
+    "required_evidence": [
+      "auth reject 3100",
+      "clock offset 420s",
+      "token used before issued",
+      "chronyd disabled"
+    ],
+    "remediation": [
+      "Restore chronyd",
+      "Recycle skewed nodes",
+      "Alert on clock offset"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

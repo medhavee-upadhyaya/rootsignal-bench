@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "images-corruption-001",
+  "title": "Image thumbnails corrupted",
+  "summary": "thumbnail outputs became invalid after a storage client upgrade",
+  "metadata": {
+    "failure_class": "partial-write",
+    "difficulty": "medium",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "image.corrupt_rate": "0% before; 13% after",
+      "image.upload_latency": "stable",
+      "storage.errors": "none"
+    },
+    "logs": [
+      "thumbnail-worker WARN uploaded bytes=0 expected=184220",
+      "storage-client INFO multipart complete"
+    ],
+    "deployments": [
+      "storage SDK v8 enabled multipart uploads without awaiting final stream flush"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "storage-integrity",
+      "title": "Partial object writes",
+      "content": "Corrupt objects without storage errors require validating byte counts, flush completion, and atomic publication."
+    }
+  ],
+  "oracle": {
+    "root_cause": "The v8 storage client completed multipart uploads before the thumbnail stream flushed.",
+    "required_evidence": [
+      "corrupt rate 13%",
+      "uploaded bytes 0",
+      "multipart complete",
+      "v8 stream flush"
+    ],
+    "remediation": [
+      "Roll back storage SDK",
+      "Verify byte count before publish",
+      "Add checksum validation"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

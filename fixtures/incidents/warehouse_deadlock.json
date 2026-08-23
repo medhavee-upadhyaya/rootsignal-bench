@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "warehouse-deadlock-001",
+  "title": "Warehouse updates retrying",
+  "summary": "warehouse inventory transactions began deadlocking after a query rollout",
+  "metadata": {
+    "failure_class": "database-deadlock",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "warehouse.deadlocks": "2/hour before; 780/min after",
+      "warehouse.tx_latency": "45ms before; 4100ms after",
+      "warehouse.cpu": "38%"
+    },
+    "logs": [
+      "warehouse-db ERROR deadlock detected between update_stock and reserve_stock",
+      "warehouse-api WARN transaction retry 5"
+    ],
+    "deployments": [
+      "v3.8 reversed table update order in reserve_stock"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "transaction-locking",
+      "title": "Database deadlocks",
+      "content": "A deadlock spike after query-order changes requires consistent lock ordering and bounded retry behavior."
+    }
+  ],
+  "oracle": {
+    "root_cause": "v3.8 reversed lock order in reserve_stock, conflicting with update_stock transactions.",
+    "required_evidence": [
+      "deadlocks 780",
+      "latency 4100ms",
+      "deadlock detected",
+      "reversed update order"
+    ],
+    "remediation": [
+      "Restore consistent lock order",
+      "Roll back v3.8",
+      "Alert on deadlock rate"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

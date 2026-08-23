@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "ledger-replica-001",
+  "title": "Ledger reads stale",
+  "summary": "ledger-api returned balances several minutes behind confirmed writes",
+  "metadata": {
+    "failure_class": "replication-lag",
+    "difficulty": "hard",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "ledger.replica_lag": "0.2s before; 410s after",
+      "ledger.write_latency": "stable at 22ms",
+      "ledger.read_mismatch": "0 before; 18%"
+    },
+    "logs": [
+      "ledger-replica WARN apply worker stopped duplicate key",
+      "ledger-primary INFO commits healthy"
+    ],
+    "deployments": [
+      "index migration created conflicting row on replica at 09:40Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "database-replication",
+      "title": "Replica apply stopped",
+      "content": "High replica lag with healthy primary commits requires inspecting apply errors. Repair the replica before serving consistency-sensitive reads."
+    }
+  ],
+  "oracle": {
+    "root_cause": "A conflicting index-migration row stopped replica apply, causing 410-second stale ledger reads.",
+    "required_evidence": [
+      "replica lag 410s",
+      "read mismatch 18%",
+      "apply worker stopped",
+      "primary healthy"
+    ],
+    "remediation": [
+      "Remove replica conflict",
+      "Resume replication",
+      "Route balance reads to primary"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}

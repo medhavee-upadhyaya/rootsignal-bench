@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "id": "pricing-feature-001",
+  "title": "Pricing errors for one region",
+  "summary": "pricing-api returned failures only for EU requests after a feature launch",
+  "metadata": {
+    "failure_class": "feature-flag-scope",
+    "difficulty": "medium",
+    "license": "CC0-1.0",
+    "synthetic": true
+  },
+  "telemetry": {
+    "metrics": {
+      "pricing.eu_error": "0.1% before; 62% after",
+      "pricing.us_error": "0.1% stable",
+      "pricing.cpu": "normal"
+    },
+    "logs": [
+      "pricing-api ERROR missing vat_rules_v2 for region=EU",
+      "feature-client INFO flag vat-v2 enabled region=EU"
+    ],
+    "deployments": [
+      "vat-v2 enabled for 100% EU and 0% US at 15:10Z"
+    ]
+  },
+  "runbooks": [
+    {
+      "id": "feature-flags",
+      "title": "Scoped feature failure",
+      "content": "A region-specific regression aligned with a flag rollout should be mitigated by disabling that scope before code rollback."
+    }
+  ],
+  "oracle": {
+    "root_cause": "The vat-v2 flag was enabled for EU before vat_rules_v2 data was loaded.",
+    "required_evidence": [
+      "EU error 62%",
+      "US stable",
+      "missing vat_rules_v2",
+      "flag enabled EU"
+    ],
+    "remediation": [
+      "Disable vat-v2 for EU",
+      "Load VAT rules",
+      "Add flag prerequisite"
+    ],
+    "expected_tools": [
+      "query_metrics",
+      "query_logs",
+      "query_deployments",
+      "retrieve_knowledge"
+    ]
+  }
+}
