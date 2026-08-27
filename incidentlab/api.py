@@ -16,6 +16,7 @@ except ImportError as exc:  # pragma: no cover
     raise RuntimeError("Install RootSignal with the 'api' dependency group") from exc
 
 from .agent import Investigator
+from .comparison import compare_runs
 from .fixtures import load_incident
 from .http import RateLimiter, request_id
 from .knowledge import KnowledgeBase
@@ -40,7 +41,12 @@ RATE_LIMITER = RateLimiter(
     limit=int(os.getenv("ROOTSIGNAL_RATE_LIMIT", "60")),
     window_seconds=float(os.getenv("ROOTSIGNAL_RATE_WINDOW_SECONDS", "60")),
 )
-RATE_LIMITED_PATHS = {"/v1/investigations", "/v1/knowledge", "/v1/baselines/deterministic"}
+RATE_LIMITED_PATHS = {
+    "/v1/investigations",
+    "/v1/knowledge",
+    "/v1/baselines/deterministic",
+    "/v1/comparisons",
+}
 
 
 def _error(code: str, message: str, correlation_id: str) -> dict[str, object]:
@@ -89,7 +95,12 @@ async def harden_http(request: Request, call_next):
 @app.exception_handler(HTTPException)
 async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
     correlation_id = getattr(request.state, "request_id", request_id(None))
-    codes = {404: "not_found", 429: "rate_limit_exceeded", 503: "service_unavailable"}
+    codes = {
+        404: "not_found",
+        409: "comparison_conflict",
+        429: "rate_limit_exceeded",
+        503: "service_unavailable",
+    }
     return JSONResponse(
         status_code=exc.status_code,
         content=_error(codes.get(exc.status_code, "request_failed"), str(exc.detail), correlation_id),
@@ -123,6 +134,11 @@ class InvestigationRequest(BaseModel):
 class KnowledgeRequest(BaseModel):
     source: str = Field(min_length=1, max_length=200)
     text: str = Field(min_length=20, max_length=1_000_000)
+
+
+class ComparisonRequest(BaseModel):
+    reference_run_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    candidate_run_id: str = Field(pattern=r"^[a-f0-9]{32}$")
 
 
 def _incident_path(incident_id: str) -> Path | None:
@@ -293,6 +309,23 @@ def get_run(run_id: str) -> dict[str, object]:
     if run is None:
         raise HTTPException(status_code=404, detail="Unknown run")
     return run
+
+
+@app.post("/v1/comparisons")
+def compare(payload: ComparisonRequest) -> dict[str, object]:
+    if payload.reference_run_id == payload.candidate_run_id:
+        raise HTTPException(status_code=409, detail="Select two different runs")
+    reference = RUNS.get(payload.reference_run_id)
+    candidate = RUNS.get(payload.candidate_run_id)
+    if reference is None or candidate is None:
+        raise HTTPException(status_code=404, detail="Unknown run")
+    incident = _incident(str(reference["incident_id"]))
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident fixture unavailable")
+    try:
+        return compare_runs(incident, reference, candidate)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/v1/knowledge")

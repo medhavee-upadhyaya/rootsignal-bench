@@ -45,6 +45,20 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(run_id, [run["run_id"] for run in history["runs"]])
 
+    def test_comparison_rejects_identical_runs(self) -> None:
+        status, _, result = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}
+        )
+        self.assertEqual(status, 200)
+        run_id = result["record"]["run_id"]
+        status, _, payload = asgi_request(
+            "POST",
+            "/v1/comparisons",
+            body={"reference_run_id": run_id, "candidate_run_id": run_id},
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(payload["error"]["code"], "comparison_conflict")
+
     def test_incident_catalog_is_public_and_complete(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/incidents")
         self.assertEqual(status, 200)

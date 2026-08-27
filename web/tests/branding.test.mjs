@@ -60,3 +60,16 @@ test("exposes durable experiment history and run restoration", async () => {
   assert.match(runsRoute, /\/v1\/runs/);
   assert.match(runsRoute, /encodeURIComponent\(runId\)/);
 });
+
+test("supports fixture-matched regression comparisons", async () => {
+  const [page, compareRoute] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/compare/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /REGRESSION ANALYSIS/);
+  assert.match(page, /same incident and fixture revision/);
+  assert.match(page, /CANDIDATE VERDICT/);
+  assert.match(page, /comparison\.deltas\.latency_ms/);
+  assert.match(compareRoute, /\/v1\/comparisons/);
+});

@@ -50,6 +50,22 @@ type StoredRun = RunSummary & {
   result: Investigation;
   metadata: { api_version: string; oracle_backed: boolean; retrieval_engine: string; request_id: string };
 };
+type Scorecard = {
+  root_cause: number;
+  tool_selection: number;
+  tool_precision: number;
+  evidence_coverage: number;
+  citation_validity: number;
+  remediation_coverage: number;
+  overall: number;
+};
+type Comparison = {
+  verdict: "improved" | "regressed" | "unchanged";
+  reasons: string[];
+  reference: { run: { run_id: string; model: string; mode: ExecutionMode; latency_ms: number; root_cause: string }; scorecard: Scorecard };
+  candidate: { run: { run_id: string; model: string; mode: ExecutionMode; latency_ms: number; root_cause: string }; scorecard: Scorecard };
+  deltas: Scorecard & { latency_ms: number; latency_percent: number | null };
+};
 
 type Benchmark = {
   model: string;
@@ -93,6 +109,11 @@ export default function Home() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeRun, setActiveRun] = useState<StoredRun | null>(null);
+  const [referenceRunId, setReferenceRunId] = useState("");
+  const [candidateRunId, setCandidateRunId] = useState("");
+  const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState("");
 
   useEffect(() => {
     fetch("/api/benchmark").then((response) => response.ok ? response.json() : null).then((data) => data && setBenchmark(data)).catch(() => undefined);
@@ -111,6 +132,8 @@ export default function Home() {
       .catch((error) => setRunError(error instanceof Error ? error.message : "Incident catalog unavailable"));
     refreshSystem();
     refreshRuns();
+    // Initial data bootstrap; subsequent refreshes are explicit user or run-completion actions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function refreshSystem() {
@@ -133,10 +156,24 @@ export default function Home() {
       if (!response.ok) throw new Error("Run history unavailable");
       const payload = await response.json();
       setHistory(payload.runs);
+      chooseComparablePair(payload.runs);
     } catch {
       setHistory([]);
     } finally {
       setHistoryLoading(false);
+    }
+  }
+
+  function chooseComparablePair(runs: RunSummary[]) {
+    for (const candidate of runs) {
+      const reference = runs.find(
+        (run) => run.run_id !== candidate.run_id && run.incident_id === candidate.incident_id && run.fixture_sha256 === candidate.fixture_sha256,
+      );
+      if (reference) {
+        setReferenceRunId((current) => current || reference.run_id);
+        setCandidateRunId((current) => current || candidate.run_id);
+        return;
+      }
     }
   }
 
@@ -213,6 +250,38 @@ export default function Home() {
       if (scroll) document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
     } catch (error) {
       setRunError(error instanceof Error ? error.message : "Could not load run");
+    }
+  }
+
+  function selectReference(runId: string) {
+    const reference = history.find((run) => run.run_id === runId);
+    const candidate = history.find(
+      (run) => run.run_id !== runId && run.incident_id === reference?.incident_id && run.fixture_sha256 === reference?.fixture_sha256,
+    );
+    setReferenceRunId(runId);
+    setCandidateRunId(candidate?.run_id ?? "");
+    setComparison(null);
+    setComparisonError("");
+  }
+
+  async function compareSelectedRuns() {
+    if (!referenceRunId || !candidateRunId) return;
+    setComparisonLoading(true);
+    setComparisonError("");
+    try {
+      const response = await fetch("/api/compare", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reference_run_id: referenceRunId, candidate_run_id: candidateRunId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || "Comparison failed");
+      setComparison(payload);
+    } catch (error) {
+      setComparison(null);
+      setComparisonError(error instanceof Error ? error.message : "Comparison failed");
+    } finally {
+      setComparisonLoading(false);
     }
   }
 
@@ -455,6 +524,61 @@ export default function Home() {
         ) : (
           <div className="runs-empty">{historyLoading ? "Loading saved experiments…" : "No saved runs yet. Complete a control or agent run to create the first experiment record."}</div>
         )}
+        <div className="comparison-workspace">
+          <div className="comparison-heading">
+            <div><span>REGRESSION ANALYSIS</span><h3>Compare experiments</h3></div>
+            <p>Fair comparisons require the same incident and fixture revision. The candidate is judged against the reference.</p>
+          </div>
+          <div className="comparison-controls">
+            <label>REFERENCE RUN<select aria-label="Reference run" value={referenceRunId} onChange={(event) => selectReference(event.target.value)}>
+              <option value="">Select a reference</option>
+              {history.map((run) => <option value={run.run_id} key={run.run_id}>{run.incident_title} · {run.model} · {run.run_id.slice(0, 8)}</option>)}
+            </select></label>
+            <span>→</span>
+            <label>CANDIDATE RUN<select aria-label="Candidate run" value={candidateRunId} onChange={(event) => { setCandidateRunId(event.target.value); setComparison(null); setComparisonError(""); }} disabled={!referenceRunId}>
+              <option value="">Select a candidate</option>
+              {history.filter((run) => {
+                const reference = history.find((item) => item.run_id === referenceRunId);
+                return run.run_id !== referenceRunId && run.incident_id === reference?.incident_id && run.fixture_sha256 === reference?.fixture_sha256;
+              }).map((run) => <option value={run.run_id} key={run.run_id}>{run.model} · {run.mode} · {run.run_id.slice(0, 8)}</option>)}
+            </select></label>
+            <button onClick={compareSelectedRuns} disabled={!referenceRunId || !candidateRunId || comparisonLoading}>{comparisonLoading ? "Comparing…" : "Compare runs"}</button>
+          </div>
+          {comparisonError && <p className="comparison-error" role="alert">{comparisonError}</p>}
+          {comparison && (
+            <div className={`comparison-result ${comparison.verdict}`}>
+              <div className="verdict">
+                <span>CANDIDATE VERDICT</span>
+                <strong>{comparison.verdict}</strong>
+                {comparison.reasons.map((reason) => <p key={reason}>{reason}</p>)}
+              </div>
+              <div className="comparison-table">
+                <div className="comparison-row header"><span>Metric</span><span>Reference</span><span>Candidate</span><span>Delta</span></div>
+                {([
+                  ["Overall quality", "overall"],
+                  ["Root cause", "root_cause"],
+                  ["Tool selection", "tool_selection"],
+                  ["Tool precision", "tool_precision"],
+                  ["Evidence coverage", "evidence_coverage"],
+                  ["Citation validity", "citation_validity"],
+                  ["Remediation", "remediation_coverage"],
+                ] as const).map(([label, metric]) => (
+                  <div className="comparison-row" key={metric}>
+                    <span>{label}</span>
+                    <span>{comparison.reference.scorecard[metric].toFixed(2)}</span>
+                    <span>{comparison.candidate.scorecard[metric].toFixed(2)}</span>
+                    <span className={comparison.deltas[metric] > 0 ? "positive" : comparison.deltas[metric] < 0 ? "negative" : ""}>{comparison.deltas[metric] > 0 ? "+" : ""}{comparison.deltas[metric].toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="comparison-row"><span>Latency</span><span>{Math.round(comparison.reference.run.latency_ms)}ms</span><span>{Math.round(comparison.candidate.run.latency_ms)}ms</span><span className={comparison.deltas.latency_ms < 0 ? "positive" : comparison.deltas.latency_ms > 0 ? "negative" : ""}>{comparison.deltas.latency_ms > 0 ? "+" : ""}{Math.round(comparison.deltas.latency_ms)}ms</span></div>
+              </div>
+              <div className="diagnosis-compare">
+                <div><span>REFERENCE · {comparison.reference.run.model}</span><p>{comparison.reference.run.root_cause}</p></div>
+                <div><span>CANDIDATE · {comparison.candidate.run.model}</span><p>{comparison.candidate.run.root_cause}</p></div>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="knowledge-section" id="knowledge">
