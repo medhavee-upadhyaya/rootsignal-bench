@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -22,9 +23,12 @@ from .llm import OllamaClient
 from .models import Incident
 from .observability import METRICS, log_event, trace_span
 from .rag_agent import GroundedAgent
+from .runs import ExecutionMode, RunStore
 
 FIXTURE_ROOT = Path(os.getenv("INCIDENTLAB_FIXTURES", "fixtures/incidents")).resolve()
-KNOWLEDGE = KnowledgeBase(os.getenv("INCIDENTLAB_DB", "work/incidentlab.db"))
+DB_PATH = os.getenv("INCIDENTLAB_DB", "work/incidentlab.db")
+KNOWLEDGE = KnowledgeBase(DB_PATH)
+RUNS = RunStore(DB_PATH)
 BENCHMARK_PATH = Path(os.getenv("INCIDENTLAB_BENCHMARK", "benchmarks/results/qwen3-1.7b-local.json"))
 LLM = OllamaClient(
     os.getenv("INCIDENTLAB_LLM_URL", "http://127.0.0.1:11434"),
@@ -121,11 +125,14 @@ class KnowledgeRequest(BaseModel):
     text: str = Field(min_length=20, max_length=1_000_000)
 
 
-def _incident(incident_id: str) -> Incident | None:
+def _incident_path(incident_id: str) -> Path | None:
     paths = sorted([*FIXTURE_ROOT.glob("*.yaml"), *FIXTURE_ROOT.glob("*.json")])
-    return next(
-        (candidate for path in paths if (candidate := load_incident(path)).incident_id == incident_id), None
-    )
+    return next((path for path in paths if load_incident(path).incident_id == incident_id), None)
+
+
+def _incident(incident_id: str) -> Incident | None:
+    path = _incident_path(incident_id)
+    return load_incident(path) if path else None
 
 
 def _public_incident(incident: Incident, *, include_observations: bool = False) -> dict[str, object]:
@@ -152,6 +159,44 @@ def _public_incident(incident: Incident, *, include_observations: bool = False) 
 def _incidents() -> list[Incident]:
     paths = sorted([*FIXTURE_ROOT.glob("*.yaml"), *FIXTURE_ROOT.glob("*.json")])
     return sorted((load_incident(path) for path in paths), key=lambda incident: incident.incident_id)
+
+
+def _record_result(
+    *,
+    incident: Incident,
+    mode: ExecutionMode,
+    query: str,
+    result: dict[str, object],
+    latency_ms: float,
+    request_id_value: str,
+) -> dict[str, object]:
+    path = _incident_path(incident.incident_id)
+    fixture_sha256 = hashlib.sha256(path.read_bytes()).hexdigest() if path else "unavailable"
+    run = result.get("run", {})
+    run_metadata = run if isinstance(run, dict) else {}
+    model = str(run_metadata.get("model", LLM.model if mode == "model" else "deterministic-v1"))
+    metadata = {
+        "api_version": app.version,
+        "latency_ms": round(latency_ms, 3),
+        "oracle_backed": mode == "baseline",
+        "request_id": request_id_value,
+        "retrieval_engine": "sqlite-fts5",
+        "prompt_tokens": int(run_metadata.get("prompt_tokens", 0)),
+        "completion_tokens": int(run_metadata.get("completion_tokens", 0)),
+        "retrieved_chunks": int(run_metadata.get("retrieved_chunks", 0)),
+    }
+    reference = RUNS.save(
+        incident_id=incident.incident_id,
+        incident_title=incident.title,
+        mode=mode,
+        model=model,
+        query=query,
+        fixture_sha256=fixture_sha256,
+        result=result,
+        metadata=metadata,
+    )
+    result["record"] = reference
+    return result
 
 
 def _seed_knowledge() -> None:
@@ -236,6 +281,20 @@ def incident_detail(incident_id: str) -> dict[str, object]:
     return _public_incident(incident, include_observations=True)
 
 
+@app.get("/v1/runs")
+def list_runs(limit: int = 20) -> dict[str, object]:
+    runs = RUNS.list(limit)
+    return {"count": len(runs), "runs": runs}
+
+
+@app.get("/v1/runs/{run_id}")
+def get_run(run_id: str) -> dict[str, object]:
+    run = RUNS.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Unknown run")
+    return run
+
+
 @app.post("/v1/knowledge")
 def ingest_knowledge(request: KnowledgeRequest) -> dict[str, object]:
     return KNOWLEDGE.ingest(request.source, request.text)
@@ -252,6 +311,7 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
     if incident is None:
         raise HTTPException(status_code=404, detail="Unknown incident")
     query = payload.query or incident.summary
+    started = time.perf_counter()
     with METRICS.investigation():
         try:
             with trace_span(
@@ -269,7 +329,14 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
                 request_id=getattr(request.state, "request_id", "unknown"),
                 run=run,
             )
-            return result
+            return _record_result(
+                incident=incident,
+                mode="model",
+                query=query,
+                result=result,
+                latency_ms=(time.perf_counter() - started) * 1000,
+                request_id_value=getattr(request.state, "request_id", "unknown"),
+            )
         except Exception as exc:
             LOGGER.warning(
                 "Model unavailable request_id=%s",
@@ -280,8 +347,17 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
 
 
 @app.post("/v1/baselines/deterministic")
-def deterministic_baseline(request: InvestigationRequest) -> dict[str, object]:
-    incident = _incident(request.incident_id)
+def deterministic_baseline(payload: InvestigationRequest, request: Request) -> dict[str, object]:
+    incident = _incident(payload.incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Unknown incident")
-    return Investigator().investigate(incident).as_dict()
+    started = time.perf_counter()
+    result = Investigator().investigate(incident).as_dict()
+    return _record_result(
+        incident=incident,
+        mode="baseline",
+        query=payload.query or incident.summary,
+        result=result,
+        latency_ms=(time.perf_counter() - started) * 1000,
+        request_id_value=getattr(request.state, "request_id", "unknown"),
+    )

@@ -45,3 +45,18 @@ test("distinguishes oracle-backed controls from independent model runs", async (
   assert.match(systemRoute, /\/v1\/system/);
   assert.match(investigationRoute, /Execution mode must be baseline or model/);
 });
+
+test("exposes durable experiment history and run restoration", async () => {
+  const [page, runsRoute] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/runs/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /REPRODUCIBLE EXPERIMENTS/);
+  assert.match(page, /loadRun\(run\.run_id\)/);
+  assert.match(page, /incident hash/);
+  assert.match(page, /Reproducibility manifest/);
+  assert.match(page, /INCIDENT SHA-256/);
+  assert.match(runsRoute, /\/v1\/runs/);
+  assert.match(runsRoute, /encodeURIComponent\(runId\)/);
+});

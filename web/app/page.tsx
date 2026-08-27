@@ -12,6 +12,7 @@ type Investigation = {
   remediation: string[];
   tool_calls: ToolCall[];
   run?: { model: string; latency_ms: number; prompt_tokens: number; completion_tokens: number; retrieved_chunks: number };
+  record?: { run_id: string; created_at: string; mode: ExecutionMode };
 };
 
 type IncidentSummary = {
@@ -30,6 +31,24 @@ type SystemStatus = {
     baseline: { available: boolean; oracle_backed: boolean; purpose: string };
     model: { available: boolean; oracle_backed: boolean; purpose: string };
   };
+};
+type RunSummary = {
+  run_id: string;
+  created_at: string;
+  incident_id: string;
+  incident_title: string;
+  mode: ExecutionMode;
+  model: string;
+  fixture_sha256: string;
+  confidence: number;
+  tool_calls: number;
+  evidence_items: number;
+  latency_ms: number;
+};
+type StoredRun = RunSummary & {
+  query: string;
+  result: Investigation;
+  metadata: { api_version: string; oracle_backed: boolean; retrieval_engine: string; request_id: string };
 };
 
 type Benchmark = {
@@ -70,6 +89,10 @@ export default function Home() {
   const [knowledgeText, setKnowledgeText] = useState("");
   const [indexStatus, setIndexStatus] = useState("");
   const [benchmark, setBenchmark] = useState<Benchmark | null>(null);
+  const [history, setHistory] = useState<RunSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRun, setActiveRun] = useState<StoredRun | null>(null);
 
   useEffect(() => {
     fetch("/api/benchmark").then((response) => response.ok ? response.json() : null).then((data) => data && setBenchmark(data)).catch(() => undefined);
@@ -87,6 +110,7 @@ export default function Home() {
       })
       .catch((error) => setRunError(error instanceof Error ? error.message : "Incident catalog unavailable"));
     refreshSystem();
+    refreshRuns();
   }, []);
 
   async function refreshSystem() {
@@ -99,6 +123,20 @@ export default function Home() {
       setSystem(null);
     } finally {
       setSystemLoading(false);
+    }
+  }
+
+  async function refreshRuns() {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch("/api/runs", { cache: "no-store" });
+      if (!response.ok) throw new Error("Run history unavailable");
+      const payload = await response.json();
+      setHistory(payload.runs);
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -128,6 +166,9 @@ export default function Home() {
       if (!response.ok) throw new Error(payload.error?.message || payload.detail || "Investigation failed");
       setResult(payload);
       setCompletedMode(mode);
+      setActiveRunId(payload.record?.run_id ?? null);
+      await refreshRuns();
+      if (payload.record?.run_id) await loadRun(payload.record.run_id, false);
     } catch (error) {
       setResult(null);
       setRunError(error instanceof Error ? error.message : "Investigation failed");
@@ -142,6 +183,8 @@ export default function Home() {
     setQuery(incident?.summary ?? "");
     setResult(null);
     setCompletedMode(null);
+    setActiveRunId(null);
+    setActiveRun(null);
     setRunError("");
   }
 
@@ -149,7 +192,28 @@ export default function Home() {
     setMode(nextMode);
     setResult(null);
     setCompletedMode(null);
+    setActiveRunId(null);
+    setActiveRun(null);
     setRunError("");
+  }
+
+  async function loadRun(runId: string, scroll = true) {
+    setRunError("");
+    try {
+      const response = await fetch(`/api/runs?run_id=${encodeURIComponent(runId)}`, { cache: "no-store" });
+      const payload: StoredRun & { error?: { message?: string } } = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || "Could not load run");
+      setSelectedIncidentId(payload.incident_id);
+      setQuery(payload.query);
+      setMode(payload.mode);
+      setCompletedMode(payload.mode);
+      setResult(payload.result);
+      setActiveRunId(payload.run_id);
+      setActiveRun(payload);
+      if (scroll) document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : "Could not load run");
+    }
   }
 
   async function indexKnowledge() {
@@ -183,6 +247,7 @@ export default function Home() {
         </a>
         <nav aria-label="Primary navigation">
           <a className="nav-active" href="#workspace">Investigations</a>
+          <a href="#runs">Runs</a>
           <a href="#knowledge">Knowledge</a>
           <a href="#benchmarks">Benchmarks</a>
           <a href="#system">System</a>
@@ -347,6 +412,50 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      {activeRun && (
+        <section className="run-manifest" aria-label="Reproducibility manifest">
+          <div><span>RUN ID</span><code>{activeRun.run_id}</code></div>
+          <div><span>INCIDENT SHA-256</span><code title={activeRun.fixture_sha256}>{activeRun.fixture_sha256.slice(0, 16)}…</code></div>
+          <div><span>API / RETRIEVAL</span><code>{activeRun.metadata.api_version} · {activeRun.metadata.retrieval_engine}</code></div>
+          <div><span>REQUEST ID</span><code>{activeRun.metadata.request_id}</code></div>
+        </section>
+      )}
+
+      <section className="runs-section" id="runs">
+        <div className="runs-heading">
+          <div>
+            <p className="eyebrow"><span>●</span> REPRODUCIBLE EXPERIMENTS</p>
+            <h2>Run history</h2>
+            <p>Every successful execution is stored with its incident hash, mode, model, latency, and immutable result snapshot.</p>
+          </div>
+          <button onClick={refreshRuns} disabled={historyLoading}>{historyLoading ? "Loading…" : "Refresh history"}</button>
+        </div>
+        {history.length ? (
+          <div className="run-list">
+            {history.map((run) => (
+              <button className={activeRunId === run.run_id ? "active" : ""} onClick={() => loadRun(run.run_id)} key={run.run_id}>
+                <span className={`run-mode ${run.mode}`}>{run.mode === "baseline" ? "CONTROL" : "AGENT"}</span>
+                <div>
+                  <strong>{run.incident_title}</strong>
+                  <small>{run.model} · {run.tool_calls} tools · {run.evidence_items} evidence</small>
+                </div>
+                <div className="run-stats">
+                  <strong>{Math.round(run.confidence * 100)}%</strong>
+                  <small>{run.latency_ms < 1000 ? `${Math.round(run.latency_ms)}ms` : `${(run.latency_ms / 1000).toFixed(1)}s`}</small>
+                </div>
+                <div className="run-identity">
+                  <code>{run.run_id.slice(0, 8)}</code>
+                  <time>{new Date(run.created_at).toLocaleString()}</time>
+                </div>
+                <span className="open-run">Open →</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="runs-empty">{historyLoading ? "Loading saved experiments…" : "No saved runs yet. Complete a control or agent run to create the first experiment record."}</div>
+        )}
+      </section>
 
       <section className="knowledge-section" id="knowledge">
         <div className="knowledge-copy">

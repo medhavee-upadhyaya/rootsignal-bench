@@ -5,23 +5,45 @@ import json
 import unittest
 
 try:
-    from fastapi import HTTPException
-    from incidentlab.api import InvestigationRequest, app, deterministic_baseline
+    from incidentlab.api import InvestigationRequest, app
     from incidentlab.http import RateLimiter, request_id
-except ImportError:
+except (ImportError, RuntimeError):
     InvestigationRequest = None  # type: ignore[assignment,misc]
 
 
 @unittest.skipIf(InvestigationRequest is None, "API dependencies are not installed")
 class APITests(unittest.TestCase):
     def test_investigation_resolves_declared_fixture_id(self) -> None:
-        response = deterministic_baseline(InvestigationRequest(incident_id="checkout-latency-001"))
+        status, _, response = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}
+        )
+        self.assertEqual(status, 200)
         self.assertEqual(response["incident_id"], "checkout-latency-001")
+        self.assertRegex(response["record"]["run_id"], r"^[a-f0-9]{32}$")
 
     def test_unknown_incident_is_404(self) -> None:
-        with self.assertRaises(HTTPException) as raised:
-            deterministic_baseline(InvestigationRequest(incident_id="missing"))
-        self.assertEqual(raised.exception.status_code, 404)
+        status, _, _ = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "missing"}
+        )
+        self.assertEqual(status, 404)
+
+    def test_completed_run_is_available_in_history(self) -> None:
+        status, _, result = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "billing-clock-001"}
+        )
+        self.assertEqual(status, 200)
+        run_id = result["record"]["run_id"]
+
+        status, _, record = asgi_request("GET", f"/v1/runs/{run_id}")
+        self.assertEqual(status, 200)
+        self.assertEqual(record["incident_id"], "billing-clock-001")
+        self.assertEqual(record["mode"], "baseline")
+        self.assertTrue(record["metadata"]["oracle_backed"])
+        self.assertEqual(record["result"]["root_cause"], result["root_cause"])
+
+        status, _, history = asgi_request("GET", "/v1/runs")
+        self.assertEqual(status, 200)
+        self.assertIn(run_id, [run["run_id"] for run in history["runs"]])
 
     def test_incident_catalog_is_public_and_complete(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/incidents")
