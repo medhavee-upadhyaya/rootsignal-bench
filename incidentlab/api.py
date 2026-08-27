@@ -186,10 +186,31 @@ def readiness():
 
 @app.get("/v1/system")
 def system() -> dict[str, object]:
+    model_healthy = LLM.healthy()
     return {
-        "llm": {"provider": "openai-compatible", "model": LLM.model, "healthy": LLM.healthy()},
+        "llm": {
+            "provider": "openai-compatible",
+            "model": LLM.model,
+            "healthy": model_healthy,
+            "configuration": {
+                "endpoint_env": "INCIDENTLAB_LLM_URL",
+                "model_env": "INCIDENTLAB_MODEL",
+            },
+        },
+        "execution_modes": {
+            "baseline": {
+                "available": FIXTURE_ROOT.exists(),
+                "oracle_backed": True,
+                "purpose": "Reproducible control run for pipeline verification",
+            },
+            "model": {
+                "available": model_healthy,
+                "oracle_backed": False,
+                "purpose": "Grounded agent run for evaluation",
+            },
+        },
         "retrieval": {"engine": "sqlite-fts5", **KNOWLEDGE.stats()},
-        "tools": ["query_metrics", "query_logs", "query_deployments", "retrieve_knowledge"],
+        "tools": ["query_metrics", "query_logs", "query_deployments", "search_runbooks"],
         "inference": {"development": "llama.cpp", "production": "openai-compatible/vllm"},
     }
 

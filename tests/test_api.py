@@ -50,6 +50,15 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(payload["error"]["code"], "not_found")
 
+    def test_system_describes_honest_execution_modes(self) -> None:
+        status, _, payload = asgi_request("GET", "/v1/system")
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["execution_modes"]["baseline"]["oracle_backed"])
+        self.assertFalse(payload["execution_modes"]["model"]["oracle_backed"])
+        self.assertEqual(payload["llm"]["configuration"]["endpoint_env"], "INCIDENTLAB_LLM_URL")
+        self.assertNotIn("base_url", payload["llm"])
+        self.assertIn("search_runbooks", payload["tools"])
+
     def test_request_id_is_echoed_in_success_and_structured_error(self) -> None:
         correlation_id = "incident-checkout-42"
         status, headers, _ = asgi_request("GET", "/healthz", headers={"x-request-id": correlation_id})

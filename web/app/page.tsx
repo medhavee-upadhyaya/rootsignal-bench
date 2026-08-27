@@ -23,6 +23,14 @@ type IncidentSummary = {
 };
 
 type IncidentCatalog = { schema_version: string; count: number; incidents: IncidentSummary[] };
+type ExecutionMode = "baseline" | "model";
+type SystemStatus = {
+  llm: { provider: string; model: string; healthy: boolean };
+  execution_modes: {
+    baseline: { available: boolean; oracle_backed: boolean; purpose: string };
+    model: { available: boolean; oracle_backed: boolean; purpose: string };
+  };
+};
 
 type Benchmark = {
   model: string;
@@ -51,6 +59,10 @@ export default function Home() {
   const [selectedIncidentId, setSelectedIncidentId] = useState("");
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<Investigation | null>(null);
+  const [mode, setMode] = useState<ExecutionMode>("baseline");
+  const [completedMode, setCompletedMode] = useState<ExecutionMode | null>(null);
+  const [system, setSystem] = useState<SystemStatus | null>(null);
+  const [systemLoading, setSystemLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState("");
   const [activeTab, setActiveTab] = useState<"evidence" | "remediation">("evidence");
@@ -74,7 +86,21 @@ export default function Home() {
         }
       })
       .catch((error) => setRunError(error instanceof Error ? error.message : "Incident catalog unavailable"));
+    refreshSystem();
   }, []);
+
+  async function refreshSystem() {
+    setSystemLoading(true);
+    try {
+      const response = await fetch("/api/system", { cache: "no-store" });
+      if (!response.ok) throw new Error("System status unavailable");
+      setSystem(await response.json());
+    } catch {
+      setSystem(null);
+    } finally {
+      setSystemLoading(false);
+    }
+  }
 
   const selectedIncident = useMemo(
     () => catalog?.incidents.find((incident) => incident.id === selectedIncidentId) ?? null,
@@ -96,11 +122,12 @@ export default function Home() {
       const response = await fetch("/api/investigate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ incident_id: selectedIncidentId, query, mode: "baseline" }),
+        body: JSON.stringify({ incident_id: selectedIncidentId, query, mode }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || payload.detail || "Investigation failed");
       setResult(payload);
+      setCompletedMode(mode);
     } catch (error) {
       setResult(null);
       setRunError(error instanceof Error ? error.message : "Investigation failed");
@@ -114,6 +141,14 @@ export default function Home() {
     setSelectedIncidentId(incidentId);
     setQuery(incident?.summary ?? "");
     setResult(null);
+    setCompletedMode(null);
+    setRunError("");
+  }
+
+  function selectMode(nextMode: ExecutionMode) {
+    setMode(nextMode);
+    setResult(null);
+    setCompletedMode(null);
     setRunError("");
   }
 
@@ -199,6 +234,39 @@ export default function Home() {
             </div>
           )}
         </div>
+        <div className="mode-picker" role="radiogroup" aria-label="Execution mode">
+          <button
+            className={mode === "baseline" ? "active" : ""}
+            onClick={() => selectMode("baseline")}
+            role="radio"
+            aria-checked={mode === "baseline"}
+          >
+            <span>CONTROL</span>
+            <strong>Deterministic baseline</strong>
+            <small>Oracle-backed reference for verifying the evaluation pipeline.</small>
+          </button>
+          <button
+            className={mode === "model" ? "active" : ""}
+            onClick={() => selectMode("model")}
+            role="radio"
+            aria-checked={mode === "model"}
+          >
+            <span>AGENT</span>
+            <strong>{system?.llm.model || "Connected model"}</strong>
+            <small>{system?.llm.healthy ? "Grounded model run using tools and retrieved evidence." : "Model endpoint is offline or not configured."}</small>
+          </button>
+          <div className="connection-state">
+            <span className={system?.llm.healthy ? "online" : "offline"}>
+              <i /> {systemLoading ? "Checking model" : system?.llm.healthy ? "Model online" : "Model offline"}
+            </span>
+            <button onClick={refreshSystem} disabled={systemLoading}>Refresh</button>
+          </div>
+        </div>
+        {mode === "model" && !system?.llm.healthy && (
+          <div className="connection-help">
+            Start an OpenAI-compatible server, then configure <code>INCIDENTLAB_LLM_URL</code> and <code>INCIDENTLAB_MODEL</code> on the API.
+          </div>
+        )}
         <div className="command-row">
           <textarea
             value={query}
@@ -206,15 +274,15 @@ export default function Home() {
             rows={2}
             readOnly
           />
-          <button onClick={investigate} disabled={running || !selectedIncidentId}>
-            {running ? <><span className="spinner" /> Investigating</> : <>Run baseline <span>→</span></>}
+          <button onClick={investigate} disabled={running || !selectedIncidentId || (mode === "model" && !system?.llm.healthy)}>
+            {running ? <><span className="spinner" /> Investigating</> : <>Run {mode === "baseline" ? "control" : "agent"} <span>→</span></>}
           </button>
         </div>
         <div className="command-meta">
           <span><i className="dot green" /> {selectedIncident?.id ?? "catalog loading"}</span>
           <span><i className="dot amber" /> {selectedIncident?.metadata.difficulty ?? "—"}</span>
-          <span>Oracle hidden until evaluation</span>
-          <span className="live">DETERMINISTIC BASELINE</span>
+          <span>{mode === "baseline" ? "Oracle-backed synthesis" : "Oracle hidden from agent"}</span>
+          <span className={mode === "model" ? "model-mode" : "live"}>{mode === "baseline" ? "CONTROL RUN" : "MODEL RUN"}</span>
         </div>
         {runError && <p className="run-error" role="alert">{runError}. Start the RootSignal API and try again.</p>}
       </section>
@@ -238,7 +306,7 @@ export default function Home() {
               </li>
             ))}
           </ol>
-          <div className="trace-footer"><span>{result.tool_calls.length} tool calls</span><span>{result.evidence.length} cited items</span><span>{result.run?.model || "baseline"}</span></div>
+          <div className="trace-footer"><span>{result.tool_calls.length} tool calls</span><span>{result.evidence.length} cited items</span><span>{completedMode === "model" ? result.run?.model || "model" : "oracle-backed control"}</span></div>
         </article>
 
         <article className="panel diagnosis-panel">
@@ -275,7 +343,7 @@ export default function Home() {
           <div>
             <p>INVESTIGATION WORKSPACE</p>
             <h2>{selectedIncident ? selectedIncident.title : "Connect the incident catalog"}</h2>
-            <p>{selectedIncident ? "Run the baseline to inspect its tool trace, cited evidence, diagnosis, and remediation." : "RootSignal needs the API to load replayable incidents."}</p>
+            <p>{selectedIncident ? (mode === "baseline" ? "Run the control to verify tools, evidence, and the evaluation pipeline." : "Run the connected model to inspect its independent tool trace, citations, diagnosis, and remediation.") : "RootSignal needs the API to load replayable incidents."}</p>
           </div>
         </section>
       )}

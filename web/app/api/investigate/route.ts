@@ -1,5 +1,8 @@
 export async function POST(request: Request) {
   const body = await request.json();
+  if (body.mode !== "baseline" && body.mode !== "model") {
+    return Response.json({ error: { message: "Execution mode must be baseline or model" } }, { status: 422 });
+  }
   const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
   try {
     const endpoint = body.mode === "model" ? "/v1/investigations" : "/v1/baselines/deterministic";

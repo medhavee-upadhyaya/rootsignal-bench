@@ -24,9 +24,24 @@ test("implements a selectable incident workflow without fabricated results", asy
 
   assert.match(page, /selectedIncidentId/);
   assert.match(page, /Benchmark incident/);
-  assert.match(page, /Run baseline/);
+  assert.match(page, /Run \{mode === "baseline" \? "control" : "agent"\}/);
   assert.doesNotMatch(page, /DEMO DATA/);
   assert.doesNotMatch(page, /const fallback: Investigation/);
   assert.match(catalogRoute, /\/v1\/incidents/);
   assert.match(investigationRoute, /\/v1\/baselines\/deterministic/);
+});
+
+test("distinguishes oracle-backed controls from independent model runs", async () => {
+  const [page, systemRoute, investigationRoute] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/system/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /Oracle-backed reference/);
+  assert.match(page, /Oracle hidden from agent/);
+  assert.match(page, /Model endpoint is offline or not configured/);
+  assert.match(page, /INCIDENTLAB_LLM_URL/);
+  assert.match(systemRoute, /\/v1\/system/);
+  assert.match(investigationRoute, /Execution mode must be baseline or model/);
 });
