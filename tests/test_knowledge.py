@@ -46,6 +46,23 @@ class KnowledgeBaseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 knowledge.search("database", strategy="unknown")  # type: ignore[arg-type]
 
+    def test_reranking_preserves_specific_lexical_evidence_in_long_queries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            knowledge = KnowledgeBase(Path(directory) / "knowledge.db")
+            knowledge.ingest(
+                "runbook/db-pool",
+                "Pool wait rises when active connections reach capacity. Restore the safe pool size.",
+            )
+            for index in range(30):
+                knowledge.ingest(
+                    f"runbook/distractor-{index}",
+                    f"Generic deployment latency operations note number {index}.",
+                )
+            noise = " ".join(f"noise{index}" for index in range(90))
+            query = f"deployment latency {noise} db pool wait active connections capacity"
+            results = knowledge.search(query, limit=2, strategy="reranked")
+            self.assertEqual(results[0].source, "runbook/db-pool")
+
 
 if __name__ == "__main__":
     unittest.main()

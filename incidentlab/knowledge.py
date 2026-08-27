@@ -109,10 +109,10 @@ class KnowledgeBase:
     ) -> list[RetrievedChunk]:
         if strategy not in {"lexical", "semantic", "hybrid", "reranked"}:
             raise ValueError(f"Unknown retrieval strategy: {strategy}")
-        terms = re.findall(r"[a-zA-Z0-9_.-]+", query)
+        terms = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9_.-]+", query.lower())))
         if not terms:
             return []
-        fts_query = " OR ".join(f'"{term}"' for term in terms[:64])
+        fts_query = " OR ".join(f'"{term}"' for term in terms[:128])
         with self._connect() as connection:
             lexical_rows = connection.execute(
                 """
@@ -145,7 +145,13 @@ class KnowledgeBase:
             for chunk_id in rows_by_id
         }
         reranked = {
-            chunk_id: _rerank(query, rows_by_id[chunk_id]["content"], fused[chunk_id])
+            chunk_id: _rerank(
+                query,
+                rows_by_id[chunk_id]["content"],
+                lexical_order.get(chunk_id, 0.0),
+                semantic[chunk_id],
+                fused[chunk_id],
+            )
             for chunk_id in rows_by_id
         }
         scores = {
@@ -198,15 +204,29 @@ def _cosine(left: dict[int, float], right: dict[int, float]) -> float:
     return dot / (left_norm * right_norm) if left_norm and right_norm else 0.0
 
 
-def _rerank(query: str, content: str, fused_score: float) -> float:
+def _rerank(
+    query: str,
+    content: str,
+    lexical_score: float,
+    semantic_score: float,
+    fused_score: float,
+) -> float:
     query_tokens = re.findall(r"[a-z0-9_.-]+", query.lower())
     content_tokens = re.findall(r"[a-z0-9_.-]+", content.lower())
     if not content_tokens:
         return 0.0
     query_terms = set(query_tokens)
     content_terms = set(content_tokens)
-    term_coverage = len(query_terms & content_terms) / len(content_terms)
+    term_coverage = len(query_terms & content_terms) / max(len(query_terms), 1)
     query_bigrams = set(zip(query_tokens, query_tokens[1:]))
     content_bigrams = set(zip(content_tokens, content_tokens[1:]))
-    bigram_coverage = len(query_bigrams & content_bigrams) / max(len(content_bigrams), 1)
-    return (100 * fused_score) + (0.55 * term_coverage) + (0.25 * bigram_coverage)
+    bigram_coverage = len(query_bigrams & content_bigrams) / max(len(query_bigrams), 1)
+    # Preserve exact lexical evidence, then use semantic and phrase signals to
+    # resolve close candidates. RRF remains visible as a small audit tie-breaker.
+    return (
+        (0.75 * lexical_score)
+        + (0.15 * semantic_score)
+        + (0.05 * term_coverage)
+        + (0.03 * bigram_coverage)
+        + (0.02 * min(100 * fused_score, 1.0))
+    )
