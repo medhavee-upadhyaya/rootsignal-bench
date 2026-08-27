@@ -14,6 +14,16 @@ type Investigation = {
   run?: { model: string; latency_ms: number; prompt_tokens: number; completion_tokens: number; retrieved_chunks: number };
 };
 
+type IncidentSummary = {
+  id: string;
+  title: string;
+  summary: string;
+  metadata: { failure_class?: string; difficulty?: string; synthetic?: boolean };
+  observation_counts: { metrics: number; logs: number; deployments: number; runbooks: number };
+};
+
+type IncidentCatalog = { schema_version: string; count: number; incidents: IncidentSummary[] };
+
 type Benchmark = {
   model: string;
   fixture_count: number;
@@ -30,36 +40,6 @@ type Benchmark = {
   };
 };
 
-const benchmarkFallback: Benchmark = {
-  model: "Qwen3-1.7B GGUF",
-  fixture_count: 5,
-  aggregate: { root_cause: .3135, tool_selection: .95, evidence_coverage: .65, remediation_coverage: 1, overall: .6622, mean_latency_ms: 8827.17, citation_validity: 1, model_planned_steps: 19, agent_steps: 20 },
-};
-
-const fallback: Investigation = {
-  incident_id: "checkout-latency-001",
-  root_cause:
-    "Deployment v1.8.3 reduced checkout-api DB_POOL_SIZE from 40 to 10, exhausting the database connection pool.",
-  confidence: 0.94,
-  evidence: [
-    { source: "metrics", content: "p95 latency: 240ms → 2,800ms after v1.8.3", relevance: 1 },
-    { source: "metrics", content: "db.pool.wait_ms: 35ms → 1,830ms", relevance: 1 },
-    { source: "logs", content: "Database connection acquisition timed out after 2000ms", relevance: 1 },
-    { source: "deployments", content: "DB_POOL_SIZE changed from 40 → 10 at 10:02Z", relevance: 1 },
-  ],
-  remediation: [
-    "Restore DB_POOL_SIZE to 40",
-    "Roll back v1.8.3 if configuration restoration is unsafe",
-    "Alert on database pool wait time and saturation",
-  ],
-  tool_calls: [
-    { name: "query_metrics", arguments: {} },
-    { name: "query_logs", arguments: { service: "checkout-api" } },
-    { name: "query_deployments", arguments: { service: "checkout-api" } },
-    { name: "search_runbooks", arguments: { query: "database pool exhaustion" } },
-  ],
-};
-
 const sourceIcons: Record<string, string> = {
   metrics: "⌁",
   logs: "≡",
@@ -67,44 +47,74 @@ const sourceIcons: Record<string, string> = {
 };
 
 export default function Home() {
-  const [query, setQuery] = useState("Investigate checkout latency after deployment v1.8.3");
-  const [result, setResult] = useState<Investigation>(fallback);
+  const [catalog, setCatalog] = useState<IncidentCatalog | null>(null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState("");
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState<Investigation | null>(null);
   const [running, setRunning] = useState(false);
-  const [connected, setConnected] = useState<boolean | null>(null);
+  const [runError, setRunError] = useState("");
   const [activeTab, setActiveTab] = useState<"evidence" | "remediation">("evidence");
   const [source, setSource] = useState("runbook/custom-operations");
   const [knowledgeText, setKnowledgeText] = useState("");
   const [indexStatus, setIndexStatus] = useState("");
-  const [benchmark, setBenchmark] = useState<Benchmark>(benchmarkFallback);
+  const [benchmark, setBenchmark] = useState<Benchmark | null>(null);
 
   useEffect(() => {
     fetch("/api/benchmark").then((response) => response.ok ? response.json() : null).then((data) => data && setBenchmark(data)).catch(() => undefined);
+    fetch("/api/incidents")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Incident catalog unavailable");
+        return response.json();
+      })
+      .then((data: IncidentCatalog) => {
+        setCatalog(data);
+        if (data.incidents.length) {
+          setSelectedIncidentId(data.incidents[0].id);
+          setQuery(data.incidents[0].summary);
+        }
+      })
+      .catch((error) => setRunError(error instanceof Error ? error.message : "Incident catalog unavailable"));
   }, []);
 
+  const selectedIncident = useMemo(
+    () => catalog?.incidents.find((incident) => incident.id === selectedIncidentId) ?? null,
+    [catalog, selectedIncidentId],
+  );
+
   const evidenceGroups = useMemo(() => {
-    return result.evidence.reduce<Record<string, Evidence[]>>((groups, item) => {
+    return (result?.evidence ?? []).reduce<Record<string, Evidence[]>>((groups, item) => {
       (groups[item.source] ||= []).push(item);
       return groups;
     }, {});
   }, [result]);
 
   async function investigate() {
+    if (!selectedIncidentId) return;
     setRunning(true);
+    setRunError("");
     try {
       const response = await fetch("/api/investigate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ incident_id: "checkout-latency-001", query }),
+        body: JSON.stringify({ incident_id: selectedIncidentId, query, mode: "baseline" }),
       });
-      if (!response.ok) throw new Error("API unavailable");
-      setResult(await response.json());
-      setConnected(true);
-    } catch {
-      setResult(fallback);
-      setConnected(false);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || payload.detail || "Investigation failed");
+      setResult(payload);
+    } catch (error) {
+      setResult(null);
+      setRunError(error instanceof Error ? error.message : "Investigation failed");
     } finally {
       setRunning(false);
     }
+  }
+
+  function selectIncident(incidentId: string) {
+    const incident = catalog?.incidents.find((candidate) => candidate.id === incidentId);
+    setSelectedIncidentId(incidentId);
+    setQuery(incident?.summary ?? "");
+    setResult(null);
+    setRunError("");
   }
 
   async function indexKnowledge() {
@@ -150,44 +160,66 @@ export default function Home() {
 
       <section className="hero" id="top">
         <div>
-          <p className="eyebrow"><span>●</span> OPEN LLM SYSTEMS BENCHMARK</p>
-          <h1>Find the cause.<br /><em>Show the evidence.</em></h1>
+          <p className="eyebrow"><span>●</span> INCIDENT AGENT EVALUATION WORKSPACE</p>
+          <h1>Replay the incident.<br /><em>Audit the agent.</em></h1>
           <p className="hero-copy">
-            Train, serve, and evaluate tool-using agents on reproducible production incidents.
-            Every diagnosis is traced. Every claim is scored.
+            Run reproducible production incidents through an investigator, inspect every tool call and citation,
+            then measure whether a model found the right cause for the right reasons.
           </p>
         </div>
         <div className="hero-stats" aria-label="System statistics">
-          <div><strong>{benchmark.fixture_count}</strong><span>graded incidents</span></div>
-          <div><strong>{Math.round(benchmark.aggregate.tool_selection * 100)}%</strong><span>tool selection</span></div>
-          <div><strong>11/11</strong><span>tests passing</span></div>
+          <div><strong>{catalog?.count ?? "—"}</strong><span>replayable incidents</span></div>
+          <div><strong>{benchmark ? `${Math.round(benchmark.aggregate.tool_selection * 100)}%` : "—"}</strong><span>tool selection</span></div>
+          <div><strong>4</strong><span>audited tool types</span></div>
         </div>
       </section>
 
       <section className="command-card" id="workspace">
-        <div className="command-label"><span>⌘</span> NEW INVESTIGATION</div>
+        <div className="command-label"><span>⌘</span> REPLAY AN INCIDENT</div>
+        <div className="scenario-row">
+          <label>
+            BENCHMARK SCENARIO
+            <select
+              aria-label="Benchmark incident"
+              value={selectedIncidentId}
+              onChange={(event) => selectIncident(event.target.value)}
+              disabled={!catalog}
+            >
+              {!catalog && <option>Loading incident catalog…</option>}
+              {catalog?.incidents.map((incident) => (
+                <option value={incident.id} key={incident.id}>{incident.title}</option>
+              ))}
+            </select>
+          </label>
+          {selectedIncident && (
+            <div className="scenario-profile">
+              <span>{selectedIncident.metadata.failure_class?.replaceAll("-", " ")}</span>
+              <span>{selectedIncident.metadata.difficulty}</span>
+              <span>{Object.values(selectedIncident.observation_counts).reduce((sum, count) => sum + count, 0)} observations</span>
+            </div>
+          )}
+        </div>
         <div className="command-row">
           <textarea
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
             aria-label="Incident description"
             rows={2}
+            readOnly
           />
-          <button onClick={investigate} disabled={running}>
-            {running ? <><span className="spinner" /> Investigating</> : <>Run investigation <span>→</span></>}
+          <button onClick={investigate} disabled={running || !selectedIncidentId}>
+            {running ? <><span className="spinner" /> Investigating</> : <>Run baseline <span>→</span></>}
           </button>
         </div>
         <div className="command-meta">
-          <span><i className="dot green" /> checkout-api</span>
-          <span><i className="dot amber" /> SEV-2</span>
-          <span>Incident #001</span>
-          {connected !== null && (
-            <span className={connected ? "live" : "demo"}>{connected ? "LIVE API" : "DEMO DATA"}</span>
-          )}
+          <span><i className="dot green" /> {selectedIncident?.id ?? "catalog loading"}</span>
+          <span><i className="dot amber" /> {selectedIncident?.metadata.difficulty ?? "—"}</span>
+          <span>Oracle hidden until evaluation</span>
+          <span className="live">DETERMINISTIC BASELINE</span>
         </div>
+        {runError && <p className="run-error" role="alert">{runError}. Start the RootSignal API and try again.</p>}
       </section>
 
-      <section className="workspace-grid">
+      {result ? <section className="workspace-grid">
         <article className="panel investigation-panel">
           <div className="panel-heading">
             <div><span className="panel-index">01</span><div><p>INVESTIGATION TRACE</p><h2>What the agent did</h2></div></div>
@@ -237,7 +269,16 @@ export default function Home() {
             </ol>
           )}
         </article>
-      </section>
+      </section> : (
+        <section className="workspace-empty" aria-live="polite">
+          <span>01</span>
+          <div>
+            <p>INVESTIGATION WORKSPACE</p>
+            <h2>{selectedIncident ? selectedIncident.title : "Connect the incident catalog"}</h2>
+            <p>{selectedIncident ? "Run the baseline to inspect its tool trace, cited evidence, diagnosis, and remediation." : "RootSignal needs the API to load replayable incidents."}</p>
+          </div>
+        </section>
+      )}
 
       <section className="knowledge-section" id="knowledge">
         <div className="knowledge-copy">
@@ -259,7 +300,7 @@ export default function Home() {
           <h2>An agent is only as good<br />as the proof behind it.</h2>
           <p>RootSignal Bench evaluates the investigation process—not just the final prose.</p>
         </div>
-        <div className="score-card">
+        {benchmark ? <div className="score-card">
           <div className="score-top"><span>LIVE MODEL · {benchmark.fixture_count} INCIDENTS</span><strong>{benchmark.aggregate.overall.toFixed(2)}</strong></div>
           {[
             ["Root-cause score", Math.round(benchmark.aggregate.root_cause * 100)],
@@ -273,7 +314,7 @@ export default function Home() {
             </div>
           ))}
           <p className="score-note">{benchmark.model} · {(benchmark.aggregate.mean_latency_ms / 1000).toFixed(1)}s mean latency · {benchmark.aggregate.model_planned_steps}/{benchmark.aggregate.agent_steps} steps model-planned · failures published, not hidden</p>
-        </div>
+        </div> : <div className="score-card unavailable"><strong>Benchmark unavailable</strong><p>Start the API to load the latest measured evaluation artifact.</p></div>}
       </section>
 
       <section className="system-strip" id="system">

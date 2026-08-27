@@ -23,6 +23,33 @@ class APITests(unittest.TestCase):
             deterministic_baseline(InvestigationRequest(incident_id="missing"))
         self.assertEqual(raised.exception.status_code, 404)
 
+    def test_incident_catalog_is_public_and_complete(self) -> None:
+        status, _, payload = asgi_request("GET", "/v1/incidents")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["count"], 26)
+        self.assertEqual(len(payload["incidents"]), 26)
+        self.assertEqual(
+            [incident["id"] for incident in payload["incidents"]],
+            sorted(incident["id"] for incident in payload["incidents"]),
+        )
+        self.assertNotIn("oracle", json.dumps(payload).lower())
+        checkout = next(
+            incident for incident in payload["incidents"] if incident["id"] == "checkout-latency-001"
+        )
+        self.assertEqual(checkout["metadata"]["failure_class"], "database-saturation")
+        self.assertEqual(checkout["observation_counts"]["metrics"], 4)
+
+    def test_incident_detail_exposes_observations_but_not_oracle(self) -> None:
+        status, _, payload = asgi_request("GET", "/v1/incidents/checkout-latency-001")
+        self.assertEqual(status, 200)
+        self.assertIn("telemetry", payload)
+        self.assertIn("runbooks", payload)
+        self.assertNotIn("oracle", json.dumps(payload).lower())
+
+        status, _, payload = asgi_request("GET", "/v1/incidents/missing")
+        self.assertEqual(status, 404)
+        self.assertEqual(payload["error"]["code"], "not_found")
+
     def test_request_id_is_echoed_in_success_and_structured_error(self) -> None:
         correlation_id = "incident-checkout-42"
         status, headers, _ = asgi_request("GET", "/healthz", headers={"x-request-id": correlation_id})

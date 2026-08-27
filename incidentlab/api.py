@@ -19,6 +19,7 @@ from .fixtures import load_incident
 from .http import RateLimiter, request_id
 from .knowledge import KnowledgeBase
 from .llm import OllamaClient
+from .models import Incident
 from .observability import METRICS, log_event, trace_span
 from .rag_agent import GroundedAgent
 
@@ -120,11 +121,37 @@ class KnowledgeRequest(BaseModel):
     text: str = Field(min_length=20, max_length=1_000_000)
 
 
-def _incident(incident_id: str):
-    paths = list(FIXTURE_ROOT.glob("*.yaml")) + list(FIXTURE_ROOT.glob("*.json"))
+def _incident(incident_id: str) -> Incident | None:
+    paths = sorted([*FIXTURE_ROOT.glob("*.yaml"), *FIXTURE_ROOT.glob("*.json")])
     return next(
         (candidate for path in paths if (candidate := load_incident(path)).incident_id == incident_id), None
     )
+
+
+def _public_incident(incident: Incident, *, include_observations: bool = False) -> dict[str, object]:
+    telemetry = incident.telemetry
+    counts = {
+        "metrics": len(telemetry.get("metrics", {})),
+        "logs": len(telemetry.get("logs", [])),
+        "deployments": len(telemetry.get("deployments", [])),
+        "runbooks": len(incident.runbooks),
+    }
+    public: dict[str, object] = {
+        "id": incident.incident_id,
+        "title": incident.title,
+        "summary": incident.summary,
+        "metadata": incident.metadata,
+        "observation_counts": counts,
+    }
+    if include_observations:
+        public["telemetry"] = telemetry
+        public["runbooks"] = incident.runbooks
+    return public
+
+
+def _incidents() -> list[Incident]:
+    paths = sorted([*FIXTURE_ROOT.glob("*.yaml"), *FIXTURE_ROOT.glob("*.json")])
+    return sorted((load_incident(path) for path in paths), key=lambda incident: incident.incident_id)
 
 
 def _seed_knowledge() -> None:
@@ -172,6 +199,20 @@ def latest_benchmark() -> dict[str, object]:
     if not BENCHMARK_PATH.exists():
         raise HTTPException(status_code=404, detail="No benchmark result published")
     return json.loads(BENCHMARK_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/v1/incidents")
+def incident_catalog() -> dict[str, object]:
+    incidents = [_public_incident(incident) for incident in _incidents()]
+    return {"schema_version": "1.0", "count": len(incidents), "incidents": incidents}
+
+
+@app.get("/v1/incidents/{incident_id}")
+def incident_detail(incident_id: str) -> dict[str, object]:
+    incident = _incident(incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Unknown incident")
+    return _public_incident(incident, include_observations=True)
 
 
 @app.post("/v1/knowledge")
