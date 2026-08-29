@@ -19,7 +19,7 @@ body {
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
 }
-button, textarea, select { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 .shell { min-height: 100vh; overflow: hidden; }
 .topbar {
@@ -56,6 +56,26 @@ nav .nav-active::after { content: ""; height: 2px; background: var(--green); lef
 .hero-stats div { padding: 10px 0 10px 30px; min-width: 120px; }
 .hero-stats strong { display: block; font-size: 30px; letter-spacing: -.05em; }
 .hero-stats span { font: 10px monospace; color: var(--muted); text-transform: uppercase; }
+.creator-section { max-width: 1240px; margin: 0 auto 24px; }
+.creator-intro { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 18px 20px; border: 1px solid var(--line); background: var(--card); }
+.creator-intro div { display: grid; gap: 4px; }
+.creator-intro span { color: var(--green); font: 700 8px monospace; letter-spacing: .14em; }
+.creator-intro strong { font-size: 17px; }
+.creator-intro small { color: var(--muted); font-size: 11px; }
+.creator-intro button, .creator-actions button { border: 0; background: var(--green); color: white; padding: 11px 15px; font-size: 10px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.creator-panel { border: 1px solid var(--line); border-top: 0; background: #eceee6; }
+.creator-tabs { display: flex; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--card); }
+.creator-tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 12px 0; margin-right: 24px; font-size: 10px; cursor: pointer; }
+.creator-tabs button.active { border-color: var(--green); color: var(--ink); font-weight: 700; }
+.creator-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 18px; padding: 20px; }
+.creator-form label, .json-import { color: var(--muted); font: 700 8px monospace; letter-spacing: .1em; }
+.creator-form label.wide { grid-column: 1 / -1; }
+.creator-form input, .creator-form select, .creator-form textarea, .json-import textarea { display: block; width: 100%; margin-top: 7px; border: 1px solid var(--line); background: white; color: var(--ink); padding: 10px; outline: none; resize: vertical; font: 10px/1.45 monospace; }
+.creator-form input:focus, .creator-form select:focus, .creator-form textarea:focus, .json-import textarea:focus { border-color: var(--green); }
+.creator-form label.private { padding: 11px; border: 1px solid #dabfb7; background: #fff4f0; color: #9b4937; }
+.json-import { display: block; padding: 20px; }
+.creator-actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--card); }
+.creator-actions span { color: var(--muted); font: 9px/1.4 monospace; }
 .command-card { max-width: 1240px; margin: 0 auto 22px; background: var(--ink); color: white; padding: 20px 22px 15px; box-shadow: 10px 10px 0 #d7deca; }
 .command-label { font: 700 9px monospace; letter-spacing: .16em; color: #9bacaa; margin-bottom: 12px; }
 .command-label span { color: var(--mint); }
@@ -248,7 +268,7 @@ footer { border-top: 1px solid var(--line); padding: 23px 4.5vw; display: flex; 
   .hero { grid-template-columns: 1fr; padding-top: 50px; }
   .hero-stats { border: 0; border-top: 1px solid var(--line); padding-top: 15px; }
   .hero-stats div { padding-left: 0; flex: 1; }
-  .command-card, .workspace-grid, .workspace-empty, .run-manifest, .runs-section, .knowledge-section, .proof, .system-strip { margin-left: 18px; margin-right: 18px; }
+  .creator-section, .command-card, .workspace-grid, .workspace-empty, .run-manifest, .runs-section, .knowledge-section, .proof, .system-strip { margin-left: 18px; margin-right: 18px; }
   .workspace-grid, .knowledge-section, .proof { grid-template-columns: 1fr; }
   .proof { gap: 35px; }
   .system-strip { grid-template-columns: 1fr 1fr; }
@@ -269,6 +289,9 @@ footer { border-top: 1px solid var(--line); padding: 23px 4.5vw; display: flex; 
   .hero h1 { font-size: 46px; }
   .hero-stats strong { font-size: 23px; }
   .command-row { grid-template-columns: 1fr; }
+  .creator-intro, .creator-actions { align-items: stretch; flex-direction: column; }
+  .creator-form { grid-template-columns: 1fr; }
+  .creator-form label.wide { grid-column: auto; }
   .scenario-row { align-items: stretch; flex-direction: column; }
   .scenario-profile { justify-content: flex-start; }
   .mode-picker { grid-template-columns: 1fr; }

@@ -19,7 +19,7 @@ type IncidentSummary = {
   id: string;
   title: string;
   summary: string;
-  metadata: { failure_class?: string; difficulty?: string; synthetic?: boolean };
+  metadata: { failure_class?: string; difficulty?: string; synthetic?: boolean; catalog_source?: "built-in" | "custom" };
   observation_counts: { metrics: number; logs: number; deployments: number; runbooks: number };
 };
 
@@ -89,6 +89,32 @@ const sourceIcons: Record<string, string> = {
   deployments: "↗",
 };
 
+function lines(value: string) {
+  return value.split("\n").map((item) => item.trim()).filter(Boolean);
+}
+
+function buildFixture(draft: Record<string, string>) {
+  const metrics = Object.fromEntries(lines(draft.metrics).map((line) => {
+    const separator = line.indexOf("=");
+    return separator > 0 ? [line.slice(0, separator).trim(), line.slice(separator + 1).trim()] : [line, "observed"];
+  }));
+  return {
+    schema_version: "1.0",
+    id: draft.id,
+    title: draft.title,
+    summary: draft.summary,
+    metadata: { failure_class: draft.failureClass, difficulty: draft.difficulty, license: "Proprietary", synthetic: true },
+    telemetry: { metrics, logs: lines(draft.logs), deployments: lines(draft.deployments) },
+    runbooks: [{ id: `${draft.id}-operations`, title: `${draft.title} operations`, content: draft.runbook }],
+    oracle: {
+      root_cause: draft.rootCause,
+      required_evidence: lines(draft.evidence),
+      remediation: lines(draft.remediation),
+      expected_tools: ["query_metrics", "query_logs", "query_deployments", "search_runbooks"],
+    },
+  };
+}
+
 export default function Home() {
   const [catalog, setCatalog] = useState<IncidentCatalog | null>(null);
   const [selectedIncidentId, setSelectedIncidentId] = useState("");
@@ -114,6 +140,19 @@ export default function Home() {
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState("");
+  const [showCreator, setShowCreator] = useState(false);
+  const [creatorMode, setCreatorMode] = useState<"guided" | "json">("guided");
+  const [creatorStatus, setCreatorStatus] = useState("");
+  const [jsonFixture, setJsonFixture] = useState("");
+  const [incidentDraft, setIncidentDraft] = useState({
+    id: "", title: "", summary: "", failureClass: "custom-incident", difficulty: "medium",
+    metrics: "service.error_rate=12%\nservice.latency_p95=1800ms",
+    logs: "service ERROR request failed\nservice WARN latency threshold exceeded",
+    deployments: "service v2.0 deployed before the incident",
+    runbook: "Inspect correlated signals and the recent deployment. Roll back the unsafe change.",
+    rootCause: "", evidence: "error_rate 12%\nlatency_p95 1800ms",
+    remediation: "Roll back the unsafe deployment\nAdd an alert for the failure signal",
+  });
 
   useEffect(() => {
     fetch("/api/benchmark").then((response) => response.ok ? response.json() : null).then((data) => data && setBenchmark(data)).catch(() => undefined);
@@ -285,6 +324,34 @@ export default function Home() {
     }
   }
 
+  async function createCustomIncident() {
+    setCreatorStatus("Validating…");
+    try {
+      const fixture = creatorMode === "json" ? JSON.parse(jsonFixture) : buildFixture(incidentDraft);
+      const response = await fetch("/api/incidents", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(fixture),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || payload.detail || "Import failed");
+      const catalogResponse = await fetch("/api/incidents", { cache: "no-store" });
+      if (!catalogResponse.ok) throw new Error("Catalog refresh failed");
+      const updatedCatalog: IncidentCatalog = await catalogResponse.json();
+      setCatalog(updatedCatalog);
+      setSelectedIncidentId(payload.incident.id);
+      setQuery(payload.incident.summary);
+      setResult(null);
+      setActiveRun(null);
+      setActiveRunId(null);
+      setCreatorStatus(`Created ${payload.incident.id}`);
+      setShowCreator(false);
+      document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    } catch (error) {
+      setCreatorStatus(error instanceof Error ? error.message : "Import failed");
+    }
+  }
+
   async function indexKnowledge() {
     if (knowledgeText.trim().length < 20) {
       setIndexStatus("Add at least 20 characters.");
@@ -316,6 +383,7 @@ export default function Home() {
         </a>
         <nav aria-label="Primary navigation">
           <a className="nav-active" href="#workspace">Investigations</a>
+          <a href="#create">Create</a>
           <a href="#runs">Runs</a>
           <a href="#knowledge">Knowledge</a>
           <a href="#benchmarks">Benchmarks</a>
@@ -343,6 +411,31 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="creator-section" id="create">
+        <div className="creator-intro">
+          <div><span>CUSTOM EVALUATION DATA</span><strong>Bring your own incident</strong><small>Create a private scenario from observations and a hidden expected outcome.</small></div>
+          <button onClick={() => setShowCreator(!showCreator)}>{showCreator ? "Close builder" : "Create scenario →"}</button>
+        </div>
+        {showCreator && <div className="creator-panel">
+          <div className="creator-tabs"><button className={creatorMode === "guided" ? "active" : ""} onClick={() => setCreatorMode("guided")}>Guided builder</button><button className={creatorMode === "json" ? "active" : ""} onClick={() => setCreatorMode("json")}>JSON import</button></div>
+          {creatorMode === "guided" ? <div className="creator-form">
+            <label>INCIDENT ID<input value={incidentDraft.id} onChange={(event) => setIncidentDraft({...incidentDraft, id: event.target.value})} placeholder="payments-timeout-custom" /></label>
+            <label>TITLE<input value={incidentDraft.title} onChange={(event) => setIncidentDraft({...incidentDraft, title: event.target.value})} placeholder="Payment requests timing out" /></label>
+            <label className="wide">PUBLIC SUMMARY<textarea rows={2} value={incidentDraft.summary} onChange={(event) => setIncidentDraft({...incidentDraft, summary: event.target.value})} placeholder="Describe observable symptoms without revealing the answer." /></label>
+            <label>FAILURE CLASS<input value={incidentDraft.failureClass} onChange={(event) => setIncidentDraft({...incidentDraft, failureClass: event.target.value})} /></label>
+            <label>DIFFICULTY<select value={incidentDraft.difficulty} onChange={(event) => setIncidentDraft({...incidentDraft, difficulty: event.target.value})}><option>easy</option><option>medium</option><option>hard</option></select></label>
+            <label>METRICS · KEY=VALUE<textarea rows={4} value={incidentDraft.metrics} onChange={(event) => setIncidentDraft({...incidentDraft, metrics: event.target.value})} /></label>
+            <label>LOG EVENTS · ONE PER LINE<textarea rows={4} value={incidentDraft.logs} onChange={(event) => setIncidentDraft({...incidentDraft, logs: event.target.value})} /></label>
+            <label>DEPLOYMENTS · ONE PER LINE<textarea rows={3} value={incidentDraft.deployments} onChange={(event) => setIncidentDraft({...incidentDraft, deployments: event.target.value})} /></label>
+            <label>RUNBOOK<textarea rows={3} value={incidentDraft.runbook} onChange={(event) => setIncidentDraft({...incidentDraft, runbook: event.target.value})} /></label>
+            <label className="wide private-field">HIDDEN ROOT CAUSE<textarea rows={2} value={incidentDraft.rootCause} onChange={(event) => setIncidentDraft({...incidentDraft, rootCause: event.target.value})} placeholder="Expected diagnosis used only for scoring" /></label>
+            <label>REQUIRED EVIDENCE · ONE PER LINE<textarea rows={3} value={incidentDraft.evidence} onChange={(event) => setIncidentDraft({...incidentDraft, evidence: event.target.value})} /></label>
+            <label>REMEDIATION · ONE PER LINE<textarea rows={3} value={incidentDraft.remediation} onChange={(event) => setIncidentDraft({...incidentDraft, remediation: event.target.value})} /></label>
+          </div> : <label className="json-import">FIXTURE JSON<textarea rows={18} value={jsonFixture} onChange={(event) => setJsonFixture(event.target.value)} placeholder='{"schema_version":"1.0","id":"..."}' /></label>}
+          <div className="creator-actions"><span>{creatorStatus || "The oracle is stored server-side and never returned by catalog APIs."}</span><button onClick={createCustomIncident}>{creatorMode === "json" ? "Validate and import" : "Create scenario"} →</button></div>
+        </div>}
+      </section>
+
       <section className="command-card" id="workspace">
         <div className="command-label"><span>⌘</span> REPLAY AN INCIDENT</div>
         <div className="scenario-row">
@@ -364,6 +457,7 @@ export default function Home() {
             <div className="scenario-profile">
               <span>{selectedIncident.metadata.failure_class?.replaceAll("-", " ")}</span>
               <span>{selectedIncident.metadata.difficulty}</span>
+              <span>{selectedIncident.metadata.catalog_source}</span>
               <span>{Object.values(selectedIncident.observation_counts).reduce((sum, count) => sum + count, 0)} observations</span>
             </div>
           )}

@@ -35,6 +35,10 @@ def load_incident(path: str | Path) -> Incident:
         data = yaml.safe_load(text)
     except ImportError:
         data = _minimal_yaml(text)
+    return incident_from_dict(data)
+
+
+def incident_from_dict(data: dict[str, Any]) -> Incident:
     validate_fixture(data)
     return Incident(
         incident_id=data["id"],

@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
+import uuid
+from pathlib import Path
 
 try:
     from incidentlab.api import InvestigationRequest, app
@@ -62,8 +64,11 @@ class APITests(unittest.TestCase):
     def test_incident_catalog_is_public_and_complete(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/incidents")
         self.assertEqual(status, 200)
-        self.assertEqual(payload["count"], 26)
-        self.assertEqual(len(payload["incidents"]), 26)
+        self.assertGreaterEqual(payload["count"], 26)
+        self.assertEqual(
+            sum(item["metadata"]["catalog_source"] == "built-in" for item in payload["incidents"]),
+            26,
+        )
         self.assertEqual(
             [incident["id"] for incident in payload["incidents"]],
             sorted(incident["id"] for incident in payload["incidents"]),
@@ -74,6 +79,24 @@ class APITests(unittest.TestCase):
         )
         self.assertEqual(checkout["metadata"]["failure_class"], "database-saturation")
         self.assertEqual(checkout["observation_counts"]["metrics"], 4)
+
+    def test_custom_incident_is_created_without_exposing_oracle(self) -> None:
+        fixture = json.loads(
+            Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")
+        )
+        fixture["id"] = f"custom-{uuid.uuid4().hex}"
+        fixture["title"] = "Custom checkout investigation"
+        status, _, created = asgi_request("POST", "/v1/incidents", body=fixture)
+        self.assertEqual(status, 201)
+        self.assertEqual(created["incident"]["metadata"]["catalog_source"], "custom")
+        self.assertNotIn("oracle", json.dumps(created).lower())
+
+        status, _, result = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": fixture["id"]}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(result["incident_id"], fixture["id"])
+        self.assertNotEqual(result["record"]["run_id"], "")
 
     def test_incident_detail_exposes_observations_but_not_oracle(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/incidents/checkout-latency-001")

@@ -17,6 +17,7 @@ except ImportError as exc:  # pragma: no cover
 
 from .agent import Investigator
 from .comparison import compare_runs
+from .custom_incidents import CustomIncidentStore
 from .fixtures import load_incident
 from .http import RateLimiter, request_id
 from .knowledge import KnowledgeBase
@@ -30,6 +31,7 @@ FIXTURE_ROOT = Path(os.getenv("INCIDENTLAB_FIXTURES", "fixtures/incidents")).res
 DB_PATH = os.getenv("INCIDENTLAB_DB", "work/incidentlab.db")
 KNOWLEDGE = KnowledgeBase(DB_PATH)
 RUNS = RunStore(DB_PATH)
+CUSTOM_INCIDENTS = CustomIncidentStore(DB_PATH)
 BENCHMARK_PATH = Path(os.getenv("INCIDENTLAB_BENCHMARK", "benchmarks/results/qwen3-1.7b-local.json"))
 LLM = OllamaClient(
     os.getenv("INCIDENTLAB_LLM_URL", "http://127.0.0.1:11434"),
@@ -46,6 +48,7 @@ RATE_LIMITED_PATHS = {
     "/v1/knowledge",
     "/v1/baselines/deterministic",
     "/v1/comparisons",
+    "/v1/incidents",
 }
 
 
@@ -98,6 +101,7 @@ async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
     codes = {
         404: "not_found",
         409: "comparison_conflict",
+        422: "validation_error",
         429: "rate_limit_exceeded",
         503: "service_unavailable",
     }
@@ -148,7 +152,7 @@ def _incident_path(incident_id: str) -> Path | None:
 
 def _incident(incident_id: str) -> Incident | None:
     path = _incident_path(incident_id)
-    return load_incident(path) if path else None
+    return load_incident(path) if path else CUSTOM_INCIDENTS.get(incident_id)
 
 
 def _public_incident(incident: Incident, *, include_observations: bool = False) -> dict[str, object]:
@@ -163,7 +167,10 @@ def _public_incident(incident: Incident, *, include_observations: bool = False) 
         "id": incident.incident_id,
         "title": incident.title,
         "summary": incident.summary,
-        "metadata": incident.metadata,
+        "metadata": {
+            **incident.metadata,
+            "catalog_source": "custom" if CUSTOM_INCIDENTS.digest(incident.incident_id) else "built-in",
+        },
         "observation_counts": counts,
     }
     if include_observations:
@@ -174,7 +181,10 @@ def _public_incident(incident: Incident, *, include_observations: bool = False) 
 
 def _incidents() -> list[Incident]:
     paths = sorted([*FIXTURE_ROOT.glob("*.yaml"), *FIXTURE_ROOT.glob("*.json")])
-    return sorted((load_incident(path) for path in paths), key=lambda incident: incident.incident_id)
+    return sorted(
+        [*(load_incident(path) for path in paths), *CUSTOM_INCIDENTS.list()],
+        key=lambda incident: incident.incident_id,
+    )
 
 
 def _record_result(
@@ -187,7 +197,11 @@ def _record_result(
     request_id_value: str,
 ) -> dict[str, object]:
     path = _incident_path(incident.incident_id)
-    fixture_sha256 = hashlib.sha256(path.read_bytes()).hexdigest() if path else "unavailable"
+    fixture_sha256 = (
+        hashlib.sha256(path.read_bytes()).hexdigest()
+        if path
+        else CUSTOM_INCIDENTS.digest(incident.incident_id) or "unavailable"
+    )
     run = result.get("run", {})
     run_metadata = run if isinstance(run, dict) else {}
     model = str(run_metadata.get("model", LLM.model if mode == "model" else "deterministic-v1"))
@@ -216,8 +230,11 @@ def _record_result(
 
 
 def _seed_knowledge() -> None:
-    for path in [*FIXTURE_ROOT.glob("*.yaml"), *FIXTURE_ROOT.glob("*.json")]:
-        incident = load_incident(path)
+    incidents = [
+        *(load_incident(path) for path in [*FIXTURE_ROOT.glob("*.yaml"), *FIXTURE_ROOT.glob("*.json")]),
+        *CUSTOM_INCIDENTS.list(),
+    ]
+    for incident in incidents:
         for runbook in incident.runbooks:
             KNOWLEDGE.ingest(f"runbook/{runbook.get('id', 'unknown')}", runbook.get("content", ""))
 
@@ -287,6 +304,24 @@ def latest_benchmark() -> dict[str, object]:
 def incident_catalog() -> dict[str, object]:
     incidents = [_public_incident(incident) for incident in _incidents()]
     return {"schema_version": "1.0", "count": len(incidents), "incidents": incidents}
+
+
+@app.post("/v1/incidents", status_code=201)
+def create_incident(fixture: dict[str, object]) -> dict[str, object]:
+    incident_id = str(fixture.get("id", ""))
+    if _incident(incident_id) is not None:
+        raise HTTPException(status_code=409, detail="Incident id already exists")
+    try:
+        reference = CUSTOM_INCIDENTS.save(fixture)
+        incident = CUSTOM_INCIDENTS.get(incident_id)
+        assert incident is not None
+        for runbook in incident.runbooks:
+            KNOWLEDGE.ingest(
+                f"runbook/{runbook.get('id', 'unknown')}", runbook.get("content", "")
+            )
+        return {"incident": _public_incident(incident), "record": reference}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/v1/incidents/{incident_id}")

@@ -73,3 +73,18 @@ test("supports fixture-matched regression comparisons", async () => {
   assert.match(page, /comparison\.deltas\.latency_ms/);
   assert.match(compareRoute, /\/v1\/comparisons/);
 });
+
+test("supports guided and validated JSON incident imports", async () => {
+  const [page, catalogRoute] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/incidents/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /Bring your own incident/);
+  assert.match(page, /Guided builder/);
+  assert.match(page, /JSON import/);
+  assert.match(page, /HIDDEN ROOT CAUSE/);
+  assert.match(page, /buildFixture/);
+  assert.match(catalogRoute, /export async function POST/);
+  assert.match(catalogRoute, /\/v1\/incidents/);
+});
