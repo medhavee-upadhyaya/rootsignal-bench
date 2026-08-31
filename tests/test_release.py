@@ -34,8 +34,9 @@ class ReleaseContractTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertEqual(kubernetes.count(f":{EXPECTED_VERSION}"), 2)
-        self.assertIn(f"## {EXPECTED_VERSION} — Unreleased", changelog)
-        self.assertIn("release-v0.2", readme)
+        self.assertIn(f"## {EXPECTED_VERSION} — 2026-08-31", changelog)
+        self.assertIn("release-v0.2.0", readme)
+        self.assertIn("date-released: 2026-08-31", (ROOT / "CITATION.cff").read_text())
 
     def test_release_workflow_builds_both_images_with_attestations(self) -> None:
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -43,6 +44,15 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("platforms: linux/amd64,linux/arm64", workflow)
         self.assertIn("provenance: mode=max", workflow)
         self.assertIn("sbom: true", workflow)
+
+    def test_readme_retrieval_claim_matches_published_artifact(self) -> None:
+        report = json.loads(
+            (ROOT / "benchmarks/results/retrieval-26.json").read_text(encoding="utf-8")
+        )
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertEqual(len(report["incidents"]), 26)
+        self.assertEqual(report["aggregate"], {"recall_at_k": 1.0, "mrr": 0.9808})
+        self.assertIn("Recall@2 of `1.000` and MRR of `0.9808`", readme)
 
 
 if __name__ == "__main__":

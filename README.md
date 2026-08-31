@@ -7,24 +7,29 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-182321)](pyproject.toml)
 [![Benchmark](https://img.shields.io/badge/retrieval-Recall%402%201.00-c8f361)](docs/RESULTS.md)
 [![Security](https://github.com/medhavee-upadhyaya/rootsignal-bench/actions/workflows/security.yml/badge.svg)](https://github.com/medhavee-upadhyaya/rootsignal-bench/actions/workflows/security.yml)
-[![Release](https://img.shields.io/badge/release-v0.2-5dd6c0)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v0.2.0-5dd6c0)](CHANGELOG.md)
 
 RootSignal is an open benchmark and production reference system for AI agents that investigate failures using logs, metrics, traces, runbooks, and deployment history. It makes the entire LLM systems lifecycle inspectable: dataset construction, retrieval, tool use, fine-tuning, inference, evaluation, observability, and deployment.
 
 The working application uses a persistent SQLite FTS5 knowledge base, read-only diagnostic tools, and an OpenAI-compatible local model server. The same inference client targets llama.cpp for laptop development and vLLM for production GPU serving.
 
-> Status: `v0.2` working reference system. The deterministic policy is an explicitly labeled plumbing baseline; model results are reported separately and include failures.
+> Status: `v0.2.0` working reference system. The deterministic policy is an explicitly labeled plumbing baseline; model results are reported separately and include failures.
 
 **Built for:** LLM systems engineers comparing agent architectures, SRE and platform teams prototyping evidence-grounded incident response, and researchers who need reproducible tool-use evaluation instead of one-off demos.
 
 [Quickstart](#five-minute-quickstart) · [Measured results](docs/RESULTS.md) · [Benchmark contract](docs/BENCHMARK.md) · [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Releasing](docs/RELEASING.md) · [Contributing](CONTRIBUTING.md)
+
+![RootSignal product overview](web/public/og.png)
 
 ## What you can do with RootSignal
 
 | Workflow | Concrete output |
 |---|---|
 | Replay a production incident | Evidence-grounded diagnosis with citations and remediation |
+| Bring your own incident | Validated guided or JSON import with a server-side private oracle |
+| Scope operational context | Persistent knowledge collections selected per investigation |
 | Compare agent or model changes | Paired scorecards, confidence intervals, slice reports, and regression gates |
+| Share auditable evidence | Downloadable run and comparison bundles with offline SHA-256 verification |
 | Evaluate retrieval changes | Recall@k, MRR, strategy ablation, and auditable reranking scores |
 | Train a tool selector | Template-isolated train/eval data, LoRA entry point, and artifact manifests |
 | Benchmark model serving | TTFT, latency, token throughput, concurrency sweep, and SLO verdict |
@@ -70,16 +75,24 @@ npm run dev
 
 Open `http://localhost:3000` for the complete investigation workspace. The web server proxies investigation requests to the API at `http://127.0.0.1:8000`; set `INCIDENTLAB_API_URL` to use another backend.
 
-The UI can ingest runbooks and operational notes directly. Documents are chunked, content-addressed, deduplicated, indexed, retrieved during the agent run, and returned with source provenance.
+From the workspace, a user can create or import a synthetic incident, choose a control or independent model run, create scoped knowledge collections, ingest operational documents, inspect saved experiments, compare matching runs, and export a tamper-evident evidence bundle. Private grading oracles are stored server-side and never returned by catalog APIs.
 
-Run the API (requires the optional API dependencies):
+Run an independent model investigation through the API:
 
 ```bash
 pip install -e '.[api]'
 uvicorn incidentlab.api:app --reload
 curl -X POST http://localhost:8000/v1/investigations \
   -H 'content-type: application/json' \
-  -d '{"incident_id":"checkout-latency-001"}'
+  -d '{"incident_id":"checkout-latency-001","collection_ids":["incident-runbooks"]}'
+```
+
+The model endpoint must be available for this request. The offline deterministic control remains available at `/v1/baselines/deterministic` without model credentials.
+
+Verify a downloaded evidence bundle independently:
+
+```bash
+python -m incidentlab.evidence_bundle rootsignal-RUN_ID.json
 ```
 
 ## Example result
@@ -98,29 +111,29 @@ Remediation: restore DB_POOL_SIZE=40, roll back v1.8.3, and alert on pool wait t
 
 ```mermaid
 flowchart LR
-    A[Incident] --> B[Planner policy]
-    B --> C[Typed tool registry]
+    A[Built-in or custom incident] --> B[Bounded planner]
+    B --> C[Typed read-only tools]
     C --> D[Logs]
     C --> E[Metrics]
     C --> F[Deployments]
-    C --> G[Hybrid runbook retrieval]
+    C --> G[Scoped hybrid knowledge retrieval]
     D --> H[Evidence ledger]
     E --> H
     F --> H
     G --> H
     H --> I[Diagnosis with citations]
-    I --> J[Evaluation harness]
-    I --> K[OpenTelemetry]
+    I --> J[Evaluation and comparison]
+    I --> K[Metrics, traces, and run history]
+    J --> L[Verifiable evidence export]
 ```
 
-The policy is a replaceable boundary. The same incident fixtures and typed tools can evaluate a deterministic baseline, a hosted model, or a fine-tuned local model served through an OpenAI-compatible endpoint.
-
-For a local model server, construct `OpenAICompatiblePolicy(base_url, model)` and pass it to `Investigator`. The adapter intentionally shares the same contract across vLLM and hosted-compatible endpoints.
+The planner and inference client are replaceable boundaries. The same incident fixtures, typed tools, retrieval collections, and scorecards can evaluate the explicitly oracle-backed deterministic control or an independent model served through the configured OpenAI-compatible endpoint.
 
 ## Repository map
 
 ```text
 incidentlab/           Core agent, retrieval, tools, API, telemetry, CLI
+web/                   Interactive investigation and evaluation workspace
 fixtures/incidents/    Replayable benchmark incidents
 evals/                 Evaluation runner and scorecards
 training/              Dataset builder and LoRA training entry point
@@ -146,7 +159,7 @@ python -m evals.run --fixtures fixtures/incidents
 |---|---:|---:|---:|---:|---:|---:|
 | Qwen3-1.7B GGUF · llama.cpp CPU | 5 | 0.662 | 0.950 | 0.650 | 1.000 | 8.8s |
 
-Retrieval currently reaches Recall@2 of `1.000` and MRR of `0.900` across the five public-observation scenarios. These are development measurements on an Apple M4 with 16 GB unified memory, not universal performance claims. The full machine-readable result is in `benchmarks/results/`.
+Retrieval currently reaches Recall@2 of `1.000` and MRR of `0.9808` across all 26 published incidents. These are deterministic development measurements, not universal performance claims. The full machine-readable result is in `benchmarks/results/retrieval-26.json`.
 
 Evaluate the actual running local model separately from the oracle-backed plumbing baseline:
 
@@ -210,12 +223,13 @@ For deployment, `docker compose up --build` runs the complete web and API stack.
 - [x] Typed tools, evidence ledger, retrieval, API, CLI, and regression tests
 - [x] Evaluation, artifact-validated training pipeline, streaming inference benchmark, and deployment stack
 - [x] 26 audited synthetic incidents across 26 failure classes
-- [ ] Hosted-model and local-model scorecards
+- [x] Published local-model scorecard with disclosed hardware and failures
+- [ ] Additional hosted-model scorecards
 - [x] Reproducible LoRA GPU training evidence with validated manifests
 - [ ] Public LoRA adapter weights and downstream ablations
 - [x] Measured vLLM Tesla T4 concurrency sweep with TTFT and throughput
 - [ ] GPU inference matrix across additional quantization and batch configurations
-- [ ] Community leaderboard with signed result manifests
+- [ ] Community leaderboard with independently verifiable result manifests
 
 See [measured results](docs/RESULTS.md), the [architecture decision record](docs/ARCHITECTURE.md), and the [threat model](docs/THREAT_MODEL.md) before interpreting scores.
 

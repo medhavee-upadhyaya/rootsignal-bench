@@ -26,16 +26,16 @@ python -m evals.retrieval --fixtures fixtures/incidents --k 2 --ablation
 
 | Corpus | Queries | Recall@2 | MRR |
 |---|---:|---:|---:|
-| Public incident runbooks | 5 | 1.000 | 0.900 |
+| Public incident runbooks | 26 | 1.000 | 0.9808 |
 
 ### Strategy ablation
 
 | Strategy | Recall@2 | MRR |
 |---|---:|---:|
-| FTS5 lexical | 1.000 | 0.900 |
-| Hashed semantic | 0.400 | 0.300 |
-| Weighted RRF hybrid | 1.000 | 0.900 |
-| Hybrid + relevance reranker | 1.000 | 0.900 |
+| FTS5 lexical | 1.000 | 0.9808 |
+| Hashed semantic | 0.3846 | 0.2692 |
+| Weighted RRF hybrid | 0.8077 | 0.6923 |
+| Hybrid + relevance reranker | 1.000 | 0.9808 |
 
 The retriever exposes lexical, semantic, hybrid, and reranked strategies. The
 default combines SQLite FTS5 with deterministic hashed semantic features using
@@ -45,10 +45,11 @@ and fails CI if default Recall@2 falls below `1.00`. This compact implementation
 for reproducible evaluation; production deployments can replace the semantic
 encoder without changing provenance or scorecard contracts.
 
-The small public corpus does not show a gain from reranking, and the compact
-semantic baseline underperforms lexical retrieval. Both results are retained to
-prevent a more complex pipeline from being presented as an automatic quality
-improvement.
+The compact semantic and RRF hybrid baselines underperform lexical retrieval on
+this corpus. The final reranker recovers the lexical baseline but does not exceed
+it. All ablations are retained to prevent a more complex pipeline from being
+presented as an automatic quality improvement. The machine-readable report is
+stored in `benchmarks/results/retrieval-26.json`.
 
 ## Live local model
 
@@ -62,7 +63,7 @@ evidence, not universal performance claims. The complete result is stored in
 
 ## Deterministic plumbing baseline
 
-The deterministic baseline currently scores `0.940` across five fixtures under
+The deterministic baseline currently scores `0.9111` across 26 fixtures under
 scorecard schema v3. It uses each fixture oracle for synthesis and therefore
 must never be compared with a model-quality score. Its purpose is regression
 testing for tools, evidence transport, evaluation, and API behavior.

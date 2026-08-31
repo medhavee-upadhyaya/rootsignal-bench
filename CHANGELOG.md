@@ -2,18 +2,21 @@
 
 All notable changes are documented here. RootSignal follows semantic versioning.
 
-## 0.2.0 — Unreleased
+## 0.2.0 — 2026-08-31
 
 ### Application and agents
 
-- Added a complete investigation workspace with knowledge ingestion and benchmark views.
+- Added a complete investigation workspace with a selectable incident catalog, explicit control/model modes, saved experiment history, and benchmark views.
+- Added validated guided and JSON custom-incident import with durable storage and server-side private oracles.
+- Added fixture-matched run comparisons and downloadable, SHA-256-verifiable evidence bundles.
 - Replaced the scripted path with a bounded model-driven observe-act loop.
 - Added typed tool validation, duplicate suppression, budgets, citation checks, and adversarial tests.
 
 ### Retrieval, evaluation, and training
 
-- Added persistent SQLite FTS5 ingestion with provenance, hybrid retrieval, reranking, and ablations.
-- Expanded the benchmark to five incident classes with distractors and grading oracles.
+- Added persistent, investigation-scoped SQLite FTS5 knowledge collections with provenance, hybrid retrieval, reranking, and ablations.
+- Added a safe migration that quarantines documents from the earlier global index instead of silently mixing them with built-in runbooks.
+- Expanded the public corpus to 26 audited synthetic incidents across 26 failure classes; the retrieval scorecard covers all 26, while the published local-model scorecard discloses its five-incident subset.
 - Added live-model, retrieval, citation, and agent-planning evaluations.
 - Added template-isolated training splits, dataset hashes, LoRA configuration, artifact manifests, validation, and base-versus-adapter comparison.
 
@@ -27,7 +30,8 @@ All notable changes are documented here. RootSignal follows semantic versioning.
 ### Measured evidence
 
 - Published a disclosed Qwen3-1.7B llama.cpp laptop baseline, including failures.
-- Measured retrieval Recall@2 of 1.000 and MRR of 0.900 on the five public scenarios.
+- Measured retrieval Recall@2 of 1.000 and MRR of 0.9808 across all 26 public incidents.
+- Published reproducible Tesla T4 LoRA training evidence and a measured vLLM concurrency sweep with pinned model revisions and artifact hashes.
 - Kept deterministic plumbing results explicitly separate from model-backed capability claims.
 
 ## 0.1.0 — 2026-08-14

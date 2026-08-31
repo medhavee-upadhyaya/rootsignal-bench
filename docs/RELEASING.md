@@ -32,4 +32,4 @@ The release workflow rejects a tag that differs from `pyproject.toml`. A valid t
 
 Confirm the release workflow succeeds, inspect both package pages, and create GitHub release notes from the reviewed changelog. For production, deploy image digests from the completed workflow instead of relying on a mutable tag.
 
-Do not tag the current `0.2.0` state until its changelog heading and citation release date are finalized.
+The `0.2.0` changelog heading and citation date are finalized. Tag only after the release-preparation commit is on `main` and all CI and security checks are green.

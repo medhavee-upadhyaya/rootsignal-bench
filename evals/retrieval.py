@@ -47,6 +47,7 @@ def main() -> None:
     parser.add_argument("--strategy", choices=STRATEGIES, default="reranked")
     parser.add_argument("--ablation", action="store_true")
     parser.add_argument("--minimum-recall", type=float, default=1.0)
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     paths = sorted([*args.fixtures.glob("*.yaml"), *args.fixtures.glob("*.json")])
     with tempfile.TemporaryDirectory() as directory:
@@ -66,7 +67,11 @@ def main() -> None:
     }
     if args.ablation:
         report["ablation"] = {name: value["aggregate"] for name, value in results.items()}
-    print(json.dumps(report, indent=2))
+    rendered = json.dumps(report, indent=2)
+    print(rendered)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered + "\n", encoding="utf-8")
     if float(selected["aggregate"]["recall_at_k"]) < args.minimum_recall:  # type: ignore[index]
         raise SystemExit(1)
 

@@ -10,6 +10,8 @@ docker compose up --build
 
 The application is available at `http://localhost:3000`, the API at `http://localhost:8000`, and metrics at `http://localhost:8000/metrics`. Set `INCIDENTLAB_LLM_URL` and `INCIDENTLAB_MODEL` to override the default host model endpoint. Knowledge data persists in the named `rootsignal-data` volume.
 
+The built-in and custom incidents, experiment history, and scoped knowledge collections share the persistent SQLite volume. Back up the volume before destructive infrastructure changes. The deterministic control remains usable when the model endpoint is offline; independent model runs require the configured endpoint.
+
 Both containers run as UID 10001 with all Linux capabilities dropped, a read-only root filesystem, `no-new-privileges`, bounded temporary storage, and health checks. Only `/data` is writable for the API.
 
 ## Kubernetes
@@ -31,3 +33,7 @@ For multiple API replicas, replace the default `ReadWriteOnce` SQLite volume wit
 Pushing a version tag such as `v0.2.0` builds multi-architecture API and web images in GitHub Actions. Images receive semantic-version and Git-SHA tags plus SBOM and build-provenance attestations. Kubernetes uses immutable version tags instead of `latest`; production operators should pin the resulting image digest for strict reproducibility.
 
 No credential belongs in the manifest or image. Supply credentials, if a remote model endpoint requires them, through the platform secret manager at deployment time.
+
+## Release verification
+
+After the tag workflow succeeds, verify both GHCR packages contain the semantic-version and Git-SHA tags, SBOM attestation, and provenance attestation. Deploy an immutable digest rather than a mutable tag. A successful image build alone does not prove the model endpoint, persistent volume, or ingress configuration works in the target cluster; run health, readiness, one control investigation, one model investigation, and an evidence export after deployment.

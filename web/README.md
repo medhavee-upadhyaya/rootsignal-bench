@@ -1,8 +1,10 @@
 # RootSignal Web
 
 The RootSignal investigation workspace is a vinext application backed by the
-RootSignal API. It exposes incident investigation, knowledge ingestion, and
-benchmark results through one production-oriented interface.
+RootSignal API. It exposes built-in and custom incidents, explicit control and
+model investigations, scoped knowledge collections, durable runs, regression
+comparisons, verifiable evidence exports, and benchmark results through one
+production-oriented interface.
 
 ## Development
 

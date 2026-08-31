@@ -1,0 +1,316 @@
+{
+  "schema_version": "2",
+  "k": 2,
+  "selected_strategy": "reranked",
+  "strategy": "reranked",
+  "incidents": [
+    {
+      "incident_id": "analytics-schema-001",
+      "expected": "runbook/migration-compatibility",
+      "retrieved": [
+        "runbook/migration-compatibility",
+        "runbook/database-replication"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "audit-sampling-001",
+      "expected": "runbook/telemetry-sampling",
+      "retrieved": [
+        "runbook/telemetry-sampling",
+        "runbook/network-path"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "auth-certificate-001",
+      "expected": "runbook/certificate-expiry",
+      "retrieved": [
+        "runbook/certificate-expiry",
+        "runbook/cache-ttl"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "billing-clock-001",
+      "expected": "runbook/clock-synchronization",
+      "retrieved": [
+        "runbook/clock-synchronization",
+        "runbook/storage-integrity"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "catalog-memory-001",
+      "expected": "runbook/memory-growth",
+      "retrieved": [
+        "runbook/memory-growth",
+        "runbook/cache-ttl"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "checkout-latency-001",
+      "expected": "runbook/db-pool-exhaustion",
+      "retrieved": [
+        "runbook/certificate-expiry",
+        "runbook/db-pool-exhaustion"
+      ],
+      "rank": 2,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 0.5
+    },
+    {
+      "incident_id": "email-backpressure-001",
+      "expected": "runbook/backpressure",
+      "retrieved": [
+        "runbook/backpressure",
+        "runbook/memory-growth"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "gateway-packetloss-001",
+      "expected": "runbook/network-path",
+      "retrieved": [
+        "runbook/network-path",
+        "runbook/certificate-expiry"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "geo-circuit-001",
+      "expected": "runbook/resilience-policy",
+      "retrieved": [
+        "runbook/resilience-policy",
+        "runbook/external-quota"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "images-corruption-001",
+      "expected": "runbook/storage-integrity",
+      "retrieved": [
+        "runbook/storage-integrity",
+        "runbook/certificate-expiry"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "inventory-disk-001",
+      "expected": "runbook/disk-capacity",
+      "retrieved": [
+        "runbook/disk-capacity",
+        "runbook/database-replication"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "ledger-replica-001",
+      "expected": "runbook/database-replication",
+      "retrieved": [
+        "runbook/database-replication",
+        "runbook/external-quota"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "media-fd-001",
+      "expected": "runbook/resource-leak",
+      "retrieved": [
+        "runbook/resource-leak",
+        "runbook/resilience-policy"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "notifications-quota-001",
+      "expected": "runbook/external-quota",
+      "retrieved": [
+        "runbook/external-quota",
+        "runbook/queue-backlog"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "orders-threadpool-001",
+      "expected": "runbook/thread-pool",
+      "retrieved": [
+        "runbook/thread-pool",
+        "runbook/queue-backlog"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "payments-queue-001",
+      "expected": "runbook/queue-backlog",
+      "retrieved": [
+        "runbook/queue-backlog",
+        "runbook/cache-hit-collapse"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "pricing-feature-001",
+      "expected": "runbook/feature-flags",
+      "retrieved": [
+        "runbook/feature-flags",
+        "runbook/scheduling"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "profile-dns-001",
+      "expected": "runbook/dns-resolution",
+      "retrieved": [
+        "runbook/dns-resolution",
+        "runbook/database-replication"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "recommendations-gpu-001",
+      "expected": "runbook/accelerator-runtime",
+      "retrieved": [
+        "runbook/accelerator-runtime",
+        "runbook/external-quota"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "reports-timeout-001",
+      "expected": "runbook/proxy-configuration",
+      "retrieved": [
+        "runbook/proxy-configuration",
+        "runbook/transaction-locking"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "scheduler-cron-001",
+      "expected": "runbook/scheduling",
+      "retrieved": [
+        "runbook/scheduling",
+        "runbook/certificate-expiry"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "search-cache-001",
+      "expected": "runbook/cache-hit-collapse",
+      "retrieved": [
+        "runbook/cache-hit-collapse",
+        "runbook/queue-backlog"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "search-index-001",
+      "expected": "runbook/indexing",
+      "retrieved": [
+        "runbook/indexing",
+        "runbook/database-replication"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "sessions-redis-001",
+      "expected": "runbook/cache-ttl",
+      "retrieved": [
+        "runbook/cache-ttl",
+        "runbook/transaction-locking"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "stream-partition-001",
+      "expected": "runbook/partitioning",
+      "retrieved": [
+        "runbook/partitioning",
+        "runbook/queue-backlog"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "incident_id": "warehouse-deadlock-001",
+      "expected": "runbook/transaction-locking",
+      "retrieved": [
+        "runbook/transaction-locking",
+        "runbook/certificate-expiry"
+      ],
+      "rank": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0
+    }
+  ],
+  "aggregate": {
+    "recall_at_k": 1.0,
+    "mrr": 0.9808
+  },
+  "ablation": {
+    "lexical": {
+      "recall_at_k": 1.0,
+      "mrr": 0.9808
+    },
+    "semantic": {
+      "recall_at_k": 0.3846,
+      "mrr": 0.2692
+    },
+    "hybrid": {
+      "recall_at_k": 0.8077,
+      "mrr": 0.6923
+    },
+    "reranked": {
+      "recall_at_k": 1.0,
+      "mrr": 0.9808
+    }
+  }
+}
