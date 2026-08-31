@@ -102,3 +102,15 @@ test("scopes persistent knowledge collections to investigations", async () => {
   assert.match(collectionsRoute, /\/v1\/knowledge\/collections/);
   assert.match(investigationRoute, /collection_ids/);
 });
+
+test("exports portable run and comparison evidence", async () => {
+  const [page, exportRoute] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/export/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /Export JSON/);
+  assert.match(page, /Export verified evidence/);
+  assert.match(exportRoute, /\/v1\/runs\/\$\{encodeURIComponent\(runId\)\}\/export/);
+  assert.match(exportRoute, /content-disposition/);
+});

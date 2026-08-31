@@ -18,6 +18,7 @@ except ImportError as exc:  # pragma: no cover
 from .agent import Investigator
 from .comparison import compare_runs
 from .custom_incidents import CustomIncidentStore
+from .evidence_bundle import build_evidence_bundle
 from .fixtures import load_incident
 from .http import RateLimiter, request_id
 from .knowledge import KnowledgeBase
@@ -357,6 +358,27 @@ def get_run(run_id: str) -> dict[str, object]:
     if run is None:
         raise HTTPException(status_code=404, detail="Unknown run")
     return run
+
+
+@app.get("/v1/runs/{run_id}/export")
+def export_run(run_id: str, compare_to: str | None = None) -> JSONResponse:
+    run = RUNS.get(run_id)
+    comparison_run = RUNS.get(compare_to) if compare_to else None
+    if run is None or (compare_to and comparison_run is None):
+        raise HTTPException(status_code=404, detail="Unknown run")
+    incident = _incident(str(run["incident_id"]))
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident fixture unavailable")
+    try:
+        bundle = build_evidence_bundle(incident, run, comparison_run)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return JSONResponse(
+        content=bundle,
+        headers={
+            "Content-Disposition": f'attachment; filename="rootsignal-{run_id}.json"',
+        },
+    )
 
 
 @app.post("/v1/comparisons")

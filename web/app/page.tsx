@@ -631,6 +631,7 @@ export default function Home() {
           <div><span>INCIDENT SHA-256</span><code title={activeRun.fixture_sha256}>{activeRun.fixture_sha256.slice(0, 16)}…</code></div>
           <div><span>API / RETRIEVAL</span><code>{activeRun.metadata.api_version} · {activeRun.metadata.retrieval_engine}</code></div>
           <div><span>REQUEST ID</span><code>{activeRun.metadata.request_id}</code></div>
+          <a className="evidence-export" href={`/api/export?run_id=${encodeURIComponent(activeRun.run_id)}`}><span>PORTABLE EVIDENCE</span><strong>Export JSON ↓</strong></a>
         </section>
       )}
 
@@ -694,6 +695,7 @@ export default function Home() {
                 <span>CANDIDATE VERDICT</span>
                 <strong>{comparison.verdict}</strong>
                 {comparison.reasons.map((reason) => <p key={reason}>{reason}</p>)}
+                <a className="comparison-export" href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`}>Export verified evidence ↓</a>
               </div>
               <div className="comparison-table">
                 <div className="comparison-row header"><span>Metric</span><span>Reference</span><span>Candidate</span><span>Delta</span></div>

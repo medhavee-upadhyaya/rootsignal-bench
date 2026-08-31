@@ -5,9 +5,11 @@ import json
 import unittest
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 try:
     from incidentlab.api import InvestigationRequest, app
+    from incidentlab.evidence_bundle import verify_evidence_bundle
     from incidentlab.http import RateLimiter, request_id
 except (ImportError, RuntimeError):
     InvestigationRequest = None  # type: ignore[assignment,misc]
@@ -46,6 +48,26 @@ class APITests(unittest.TestCase):
         status, _, history = asgi_request("GET", "/v1/runs")
         self.assertEqual(status, 200)
         self.assertIn(run_id, [run["run_id"] for run in history["runs"]])
+
+    def test_run_export_is_downloadable_verifiable_and_oracle_free(self) -> None:
+        _, _, reference = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}
+        )
+        _, _, candidate = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}
+        )
+        run_id = reference["record"]["run_id"]
+        candidate_id = candidate["record"]["run_id"]
+
+        status, headers, bundle = asgi_request(
+            "GET", f"/v1/runs/{run_id}/export?compare_to={candidate_id}"
+        )
+
+        self.assertEqual(status, 200)
+        self.assertIn(f"rootsignal-{run_id}.json", headers["content-disposition"])
+        self.assertTrue(verify_evidence_bundle(bundle))
+        self.assertEqual(bundle["comparison"]["candidate"]["run"]["run_id"], candidate_id)
+        self.assertNotIn('"oracle":', json.dumps(bundle).lower())
 
     def test_comparison_rejects_identical_runs(self) -> None:
         status, _, result = asgi_request(
@@ -191,6 +213,7 @@ def asgi_request(
     body: dict[str, object] | None = None,
     headers: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, str], dict[str, object]]:
+    target = urlsplit(path)
     encoded = json.dumps(body).encode() if body is not None else b""
     request_headers = {"host": "test", **(headers or {})}
     if body is not None:
@@ -214,9 +237,9 @@ def asgi_request(
         "http_version": "1.1",
         "method": method,
         "scheme": "http",
-        "path": path,
-        "raw_path": path.encode(),
-        "query_string": b"",
+        "path": target.path,
+        "raw_path": target.path.encode(),
+        "query_string": target.query.encode(),
         "root_path": "",
         "headers": [(key.lower().encode(), value.encode()) for key, value in request_headers.items()],
         "client": ("testclient", 50000),
