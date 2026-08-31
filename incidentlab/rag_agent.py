@@ -26,10 +26,17 @@ class GroundedAgent:
         "retrieve_knowledge": "Search indexed runbooks and operational documents.",
     }
 
-    def __init__(self, knowledge: KnowledgeBase, llm: OllamaClient, max_steps: int = 4) -> None:
+    def __init__(
+        self,
+        knowledge: KnowledgeBase,
+        llm: OllamaClient,
+        max_steps: int = 4,
+        collection_ids: list[str] | None = None,
+    ) -> None:
         self.knowledge = knowledge
         self.llm = llm
         self.max_steps = max_steps
+        self.collection_ids = collection_ids
 
     def investigate(self, query: str, incident: Incident) -> dict[str, object]:
         evidence: list[dict[str, object]] = []
@@ -82,6 +89,7 @@ class GroundedAgent:
                 "prompt_tokens": sum(run.prompt_tokens for run in all_runs),
                 "completion_tokens": sum(run.completion_tokens for run in all_runs),
                 "retrieved_chunks": len(retrieved),
+                "knowledge_collections": self.collection_ids or ["incident-runbooks"],
                 "citation_validity": 1.0 if valid_citations else 0.0,
                 "agent_steps": len(calls),
                 "model_planned_steps": sum(call.decision_source == "model" for call in calls),
@@ -117,7 +125,11 @@ class GroundedAgent:
     ) -> list[dict[str, object]]:
         if call.name == "retrieve_knowledge":
             retrieval_query = query + " " + " ".join(str(item["content"]) for item in evidence)
-            return self._retrieved_evidence(self.knowledge.search(retrieval_query, limit=2))
+            return self._retrieved_evidence(
+                self.knowledge.search(
+                    retrieval_query, limit=2, collection_ids=self.collection_ids
+                )
+            )
         return [
             {"source": item.source, "content": item.content, "relevance": item.relevance}
             for item in TOOL_REGISTRY[call.name](incident, call.arguments)

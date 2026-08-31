@@ -233,13 +233,24 @@ textarea:read-only { color: #dbe2df; }
 .pipeline i { font-style: normal; color: #a6aaa2; }
 .ingest-card { background: var(--card); border: 1px solid var(--line); padding: 22px; box-shadow: 8px 8px 0 #d7deca; }
 .ingest-card label { display: block; color: var(--muted); font: 700 8px monospace; letter-spacing: .12em; margin-bottom: 15px; }
-.ingest-card input, .ingest-card textarea { display: block; margin-top: 7px; width: 100%; border: 1px solid var(--line); background: white; color: var(--ink); padding: 12px; outline: none; resize: vertical; font: 11px/1.5 monospace; }
-.ingest-card input:focus, .ingest-card textarea:focus { border-color: var(--green); }
+.ingest-card input, .ingest-card textarea, .ingest-card select { display: block; margin-top: 7px; width: 100%; border: 1px solid var(--line); background: white; color: var(--ink); padding: 12px; outline: none; resize: vertical; font: 11px/1.5 monospace; }
+.ingest-card input:focus, .ingest-card textarea:focus, .ingest-card select:focus { border-color: var(--green); }
 .ingest-card > div { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .ingest-card > div span { color: var(--muted); font: 9px monospace; }
 .ingest-card button { border: 0; background: var(--green); color: white; padding: 12px 16px; font-size: 10px; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .ingest-card button:hover { background: #0d684b; }
 .ingest-card button b { margin-left: 8px; }
+.collection-create { display: grid !important; grid-template-columns: 1fr 1fr auto; align-items: end !important; margin-bottom: 15px; }
+.collection-create label { margin: 0; }
+.collection-create button { height: 39px; }
+.collection-create button:disabled { opacity: .45; cursor: not-allowed; }
+.collection-scope { margin: 18px 0 0; padding: 14px; border: 1px solid var(--line); }
+.collection-scope legend { color: var(--green); font: 700 8px monospace; letter-spacing: .12em; }
+.collection-scope label { display: flex; align-items: center; gap: 9px; margin: 7px 0; cursor: pointer; }
+.collection-scope input { width: auto; margin: 0; accent-color: var(--green); }
+.collection-scope strong, .collection-scope small { display: block; letter-spacing: 0; }
+.collection-scope strong { color: var(--ink); font: 700 10px Arial; }
+.collection-scope small { margin-top: 2px; color: var(--muted); font: 8px monospace; }
 .proof { max-width: 1240px; margin: 85px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
 .section-intro h2 { font-size: 42px; line-height: 1.05; letter-spacing: -.05em; margin: 0 0 18px; }
 .section-intro > p:last-child { color: var(--muted); max-width: 430px; line-height: 1.5; }

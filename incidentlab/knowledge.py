@@ -7,6 +7,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -74,6 +75,21 @@ class KnowledgeBase:
                     content_sha256 TEXT NOT NULL UNIQUE,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+                CREATE TABLE IF NOT EXISTS collections (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS document_collections (
+                    document_id TEXT NOT NULL,
+                    collection_id TEXT NOT NULL,
+                    PRIMARY KEY(document_id, collection_id)
+                );
+                CREATE TABLE IF NOT EXISTS knowledge_schema (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
                 CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING fts5(
                     chunk_id UNINDEXED,
                     document_id UNINDEXED,
@@ -83,17 +99,87 @@ class KnowledgeBase:
                 );
                 """
             )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO collections(id, name, description, created_at)
+                VALUES ('incident-runbooks', 'Incident runbooks',
+                        'Built-in operational guidance', CURRENT_TIMESTAMP)
+                """
+            )
+            migrated = connection.execute(
+                "SELECT value FROM knowledge_schema WHERE key = 'collections-v1'"
+            ).fetchone()
+            if not migrated:
+                document_count = connection.execute("SELECT count(*) FROM documents").fetchone()[0]
+                if document_count:
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO collections(id, name, description, created_at)
+                        VALUES ('legacy-imports', 'Legacy imports',
+                                'Documents indexed before collection scoping', CURRENT_TIMESTAMP)
+                        """
+                    )
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO document_collections(document_id, collection_id)
+                        SELECT id, 'legacy-imports' FROM documents
+                        """
+                    )
+                    connection.execute(
+                        "DELETE FROM document_collections WHERE collection_id = 'incident-runbooks'"
+                    )
+                connection.execute(
+                    "INSERT INTO knowledge_schema(key, value) VALUES ('collections-v1', 'complete')"
+                )
 
-    def ingest(self, source: str, text: str) -> dict[str, int | str]:
+    def create_collection(self, collection_id: str, name: str, description: str = "") -> dict[str, str]:
+        if not re.fullmatch(r"[a-z0-9-]+", collection_id):
+            raise ValueError("Collection id must use lowercase letters, digits, and hyphens")
+        if not name.strip():
+            raise ValueError("Collection name is required")
+        created_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        try:
+            with self._connect() as connection:
+                connection.execute(
+                    "INSERT INTO collections(id, name, description, created_at) VALUES (?, ?, ?, ?)",
+                    (collection_id, name.strip(), description.strip(), created_at),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("Collection id already exists") from exc
+        return {"id": collection_id, "name": name.strip(), "description": description.strip(), "created_at": created_at}
+
+    def list_collections(self) -> list[dict[str, int | str]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT c.id, c.name, c.description, c.created_at,
+                       count(dc.document_id) AS documents
+                FROM collections c
+                LEFT JOIN document_collections dc ON dc.collection_id = c.id
+                GROUP BY c.id ORDER BY c.created_at, c.id
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def ingest(self, source: str, text: str, collection_id: str = "incident-runbooks") -> dict[str, int | str]:
         digest = hashlib.sha256(text.encode()).hexdigest()
         document_id = digest[:16]
         chunks = chunk_text(text)
         with self._connect() as connection:
+            collection = connection.execute(
+                "SELECT id FROM collections WHERE id = ?", (collection_id,)
+            ).fetchone()
+            if not collection:
+                raise ValueError("Unknown knowledge collection")
             exists = connection.execute(
                 "SELECT id FROM documents WHERE content_sha256 = ?", (digest,)
             ).fetchone()
             if exists:
-                return {"document_id": str(exists["id"]), "chunks": 0, "status": "unchanged"}
+                connection.execute(
+                    "INSERT OR IGNORE INTO document_collections VALUES (?, ?)",
+                    (str(exists["id"]), collection_id),
+                )
+                return {"document_id": str(exists["id"]), "collection_id": collection_id, "chunks": 0, "status": "unchanged"}
             connection.execute(
                 "INSERT INTO documents(id, source, content, content_sha256) VALUES (?, ?, ?, ?)",
                 (document_id, source, text, digest),
@@ -102,10 +188,14 @@ class KnowledgeBase:
                 "INSERT INTO chunks(chunk_id, document_id, source, content) VALUES (?, ?, ?, ?)",
                 [(f"{document_id}:{index}", document_id, source, content) for index, content in enumerate(chunks)],
             )
-        return {"document_id": document_id, "chunks": len(chunks), "status": "indexed"}
+            connection.execute(
+                "INSERT INTO document_collections VALUES (?, ?)", (document_id, collection_id)
+            )
+        return {"document_id": document_id, "collection_id": collection_id, "chunks": len(chunks), "status": "indexed"}
 
     def search(
-        self, query: str, limit: int = 6, strategy: RetrievalStrategy = "reranked"
+        self, query: str, limit: int = 6, strategy: RetrievalStrategy = "reranked",
+        collection_ids: list[str] | None = None,
     ) -> list[RetrievedChunk]:
         if strategy not in {"lexical", "semantic", "hybrid", "reranked"}:
             raise ValueError(f"Unknown retrieval strategy: {strategy}")
@@ -113,15 +203,29 @@ class KnowledgeBase:
         if not terms:
             return []
         fts_query = " OR ".join(f'"{term}"' for term in terms[:128])
+        selected_collections = collection_ids or ["incident-runbooks"]
+        placeholders = ",".join("?" for _ in selected_collections)
         with self._connect() as connection:
             lexical_rows = connection.execute(
-                """
-                SELECT chunk_id, source, content, bm25(chunks) AS rank
-                FROM chunks WHERE chunks MATCH ? ORDER BY rank LIMIT ?
+                f"""
+                SELECT DISTINCT chunks.chunk_id, chunks.source, chunks.content,
+                       bm25(chunks) AS rank
+                FROM chunks
+                JOIN document_collections dc ON dc.document_id = chunks.document_id
+                WHERE chunks MATCH ? AND dc.collection_id IN ({placeholders})
+                ORDER BY rank LIMIT ?
                 """,
-                (fts_query, max(limit * 4, 20)),
+                (fts_query, *selected_collections, max(limit * 4, 20)),
             ).fetchall()
-            all_rows = connection.execute("SELECT chunk_id, source, content FROM chunks").fetchall()
+            all_rows = connection.execute(
+                f"""
+                SELECT DISTINCT chunks.chunk_id, chunks.source, chunks.content
+                FROM chunks
+                JOIN document_collections dc ON dc.document_id = chunks.document_id
+                WHERE dc.collection_id IN ({placeholders})
+                """,
+                selected_collections,
+            ).fetchall()
 
         lexical_rank = {row["chunk_id"]: index for index, row in enumerate(lexical_rows, 1)}
         lexical_raw = {row["chunk_id"]: 1 / (1 + abs(row["rank"])) for row in lexical_rows}

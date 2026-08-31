@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,62 @@ from incidentlab.knowledge import KnowledgeBase, chunk_text
 
 
 class KnowledgeBaseTests(unittest.TestCase):
+    def test_collections_isolate_retrieval_and_survive_reopen(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "knowledge.db"
+            knowledge = KnowledgeBase(path)
+            knowledge.create_collection("payments", "Payments")
+            knowledge.create_collection("search", "Search")
+            knowledge.ingest(
+                "runbook/payments", "Neon badger payment retries require idempotency keys.", "payments"
+            )
+            knowledge.ingest(
+                "runbook/search", "Neon badger search errors require shard recovery.", "search"
+            )
+
+            payments = knowledge.search("neon badger", collection_ids=["payments"])
+            search = KnowledgeBase(path).search("neon badger", collection_ids=["search"])
+
+            self.assertEqual(payments[0].source, "runbook/payments")
+            self.assertEqual(search[0].source, "runbook/search")
+            self.assertEqual(
+                {item["id"] for item in KnowledgeBase(path).list_collections()},
+                {"incident-runbooks", "payments", "search"},
+            )
+
+    def test_legacy_documents_are_quarantined_from_system_runbooks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "knowledge.db"
+            connection = sqlite3.connect(path)
+            try:
+                connection.executescript(
+                    """
+                    CREATE TABLE documents (
+                        id TEXT PRIMARY KEY, source TEXT NOT NULL, content TEXT NOT NULL,
+                        content_sha256 TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL
+                    );
+                    CREATE VIRTUAL TABLE chunks USING fts5(
+                        chunk_id UNINDEXED, document_id UNINDEXED, source, content
+                    );
+                    INSERT INTO documents VALUES (
+                        'legacy-doc', 'private/note', 'secret zebra procedure',
+                        'legacy-hash', CURRENT_TIMESTAMP
+                    );
+                    INSERT INTO chunks VALUES (
+                        'legacy-doc:0', 'legacy-doc', 'private/note', 'secret zebra procedure'
+                    );
+                    """
+                )
+            finally:
+                connection.close()
+
+            knowledge = KnowledgeBase(path)
+            self.assertEqual(knowledge.search("secret zebra"), [])
+            self.assertEqual(
+                knowledge.search("secret zebra", collection_ids=["legacy-imports"])[0].source,
+                "private/note",
+            )
+
     def test_chunking_preserves_overlap_and_content(self) -> None:
         chunks = chunk_text("database pool exhaustion " * 80, size=120, overlap=20)
         self.assertGreater(len(chunks), 2)

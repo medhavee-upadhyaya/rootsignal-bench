@@ -61,7 +61,10 @@ async def harden_http(request: Request, call_next):
     started = time.perf_counter()
     correlation_id = request_id(request.headers.get("x-request-id"))
     request.state.request_id = correlation_id
-    if request.url.path in RATE_LIMITED_PATHS:
+    if any(
+        request.url.path == path or request.url.path.startswith(f"{path}/")
+        for path in RATE_LIMITED_PATHS
+    ):
         client = request.client.host if request.client else "unknown"
         allowed, remaining, retry_after = RATE_LIMITER.allow(f"{client}:{request.url.path}")
         if not allowed:
@@ -133,11 +136,21 @@ async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
 class InvestigationRequest(BaseModel):
     incident_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+$")
     query: str | None = Field(default=None, min_length=3, max_length=2000)
+    collection_ids: list[str] = Field(
+        default_factory=lambda: ["incident-runbooks"], min_length=1, max_length=10
+    )
 
 
 class KnowledgeRequest(BaseModel):
+    collection_id: str = Field(pattern=r"^[a-z0-9-]+$")
     source: str = Field(min_length=1, max_length=200)
     text: str = Field(min_length=20, max_length=1_000_000)
+
+
+class CollectionRequest(BaseModel):
+    id: str = Field(pattern=r"^[a-z0-9-]+$")
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=500)
 
 
 class ComparisonRequest(BaseModel):
@@ -365,7 +378,24 @@ def compare(payload: ComparisonRequest) -> dict[str, object]:
 
 @app.post("/v1/knowledge")
 def ingest_knowledge(request: KnowledgeRequest) -> dict[str, object]:
-    return KNOWLEDGE.ingest(request.source, request.text)
+    try:
+        return KNOWLEDGE.ingest(request.source, request.text, request.collection_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/v1/knowledge/collections")
+def list_knowledge_collections() -> dict[str, object]:
+    collections = KNOWLEDGE.list_collections()
+    return {"count": len(collections), "collections": collections}
+
+
+@app.post("/v1/knowledge/collections", status_code=201)
+def create_knowledge_collection(request: CollectionRequest) -> dict[str, str]:
+    try:
+        return KNOWLEDGE.create_collection(request.id, request.name, request.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/metrics", include_in_schema=False)
@@ -378,6 +408,13 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
     incident = _incident(payload.incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Unknown incident")
+    collections = payload.collection_ids
+    known = {str(item["id"]) for item in KNOWLEDGE.list_collections()}
+    if unknown := sorted(set(collections) - known):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown knowledge collections: {unknown}",
+        )
     query = payload.query or incident.summary
     started = time.perf_counter()
     with METRICS.investigation():
@@ -386,7 +423,9 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
                 "rootsignal.investigate",
                 {"rootsignal.incident_id": incident.incident_id, "rootsignal.model": LLM.model},
             ):
-                result = GroundedAgent(KNOWLEDGE, LLM).investigate(query, incident)
+                result = GroundedAgent(
+                    KNOWLEDGE, LLM, collection_ids=collections
+                ).investigate(query, incident)
             run = result.get("run", {})
             if isinstance(run, dict):
                 METRICS.record_agent_run(run)

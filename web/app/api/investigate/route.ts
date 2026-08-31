@@ -9,7 +9,11 @@ export async function POST(request: Request) {
     const response = await fetch(`${apiBase}${endpoint}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ incident_id: body.incident_id, query: body.query }),
+      body: JSON.stringify({
+        incident_id: body.incident_id,
+        query: body.query,
+        collection_ids: body.collection_ids,
+      }),
     });
     return new Response(await response.text(), {
       status: response.status,

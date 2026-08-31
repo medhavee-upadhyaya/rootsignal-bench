@@ -109,6 +109,34 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(payload["error"]["code"], "not_found")
 
+    def test_knowledge_collection_can_be_created_listed_and_indexed(self) -> None:
+        collection_id = f"team-{uuid.uuid4().hex}"
+        status, _, created = asgi_request(
+            "POST",
+            "/v1/knowledge/collections",
+            body={"id": collection_id, "name": "Team operations"},
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(created["id"], collection_id)
+
+        status, _, indexed = asgi_request(
+            "POST",
+            "/v1/knowledge",
+            body={
+                "collection_id": collection_id,
+                "source": "runbook/team",
+                "text": f"A sufficiently detailed operational procedure for team {collection_id}.",
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(indexed["collection_id"], collection_id)
+        self.assertGreater(indexed["chunks"], 0)
+
+        status, _, catalog = asgi_request("GET", "/v1/knowledge/collections")
+        self.assertEqual(status, 200)
+        collection = next(item for item in catalog["collections"] if item["id"] == collection_id)
+        self.assertEqual(collection["documents"], 1)
+
     def test_system_describes_honest_execution_modes(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/system")
         self.assertEqual(status, 200)

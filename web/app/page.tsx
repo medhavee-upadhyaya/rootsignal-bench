@@ -24,6 +24,7 @@ type IncidentSummary = {
 };
 
 type IncidentCatalog = { schema_version: string; count: number; incidents: IncidentSummary[] };
+type KnowledgeCollection = { id: string; name: string; description: string; documents: number };
 type ExecutionMode = "baseline" | "model";
 type SystemStatus = {
   llm: { provider: string; model: string; healthy: boolean };
@@ -130,6 +131,10 @@ export default function Home() {
   const [source, setSource] = useState("runbook/custom-operations");
   const [knowledgeText, setKnowledgeText] = useState("");
   const [indexStatus, setIndexStatus] = useState("");
+  const [collections, setCollections] = useState<KnowledgeCollection[]>([]);
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState(["incident-runbooks"]);
+  const [ingestCollectionId, setIngestCollectionId] = useState("incident-runbooks");
+  const [newCollection, setNewCollection] = useState({ id: "", name: "" });
   const [benchmark, setBenchmark] = useState<Benchmark | null>(null);
   const [history, setHistory] = useState<RunSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -171,6 +176,7 @@ export default function Home() {
       .catch((error) => setRunError(error instanceof Error ? error.message : "Incident catalog unavailable"));
     refreshSystem();
     refreshRuns();
+    refreshCollections();
     // Initial data bootstrap; subsequent refreshes are explicit user or run-completion actions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -186,6 +192,43 @@ export default function Home() {
     } finally {
       setSystemLoading(false);
     }
+  }
+
+  async function refreshCollections() {
+    try {
+      const response = await fetch("/api/collections", { cache: "no-store" });
+      if (!response.ok) throw new Error("Knowledge collections unavailable");
+      const payload = await response.json();
+      setCollections(payload.collections);
+    } catch (error) {
+      setIndexStatus(error instanceof Error ? error.message : "Knowledge collections unavailable");
+    }
+  }
+
+  async function createCollection() {
+    setIndexStatus("Creating collection…");
+    try {
+      const response = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(newCollection),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || payload.detail || "Creation failed");
+      await refreshCollections();
+      setIngestCollectionId(payload.id);
+      setSelectedCollectionIds((current) => [...new Set([...current, payload.id])]);
+      setNewCollection({ id: "", name: "" });
+      setIndexStatus(`Created ${payload.name}`);
+    } catch (error) {
+      setIndexStatus(error instanceof Error ? error.message : "Creation failed");
+    }
+  }
+
+  function toggleCollection(collectionId: string) {
+    setSelectedCollectionIds((current) => current.includes(collectionId)
+      ? (current.length === 1 ? current : current.filter((item) => item !== collectionId))
+      : [...current, collectionId]);
   }
 
   async function refreshRuns() {
@@ -236,7 +279,12 @@ export default function Home() {
       const response = await fetch("/api/investigate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ incident_id: selectedIncidentId, query, mode }),
+        body: JSON.stringify({
+          incident_id: selectedIncidentId,
+          query,
+          mode,
+          collection_ids: selectedCollectionIds,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || payload.detail || "Investigation failed");
@@ -362,12 +410,13 @@ export default function Home() {
       const response = await fetch("/api/knowledge", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ source, text: knowledgeText }),
+        body: JSON.stringify({ collection_id: ingestCollectionId, source, text: knowledgeText }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail || "Indexing failed");
       setIndexStatus(`${payload.status} · ${payload.chunks} new chunk${payload.chunks === 1 ? "" : "s"}`);
       setKnowledgeText("");
+      await refreshCollections();
     } catch (error) {
       setIndexStatus(error instanceof Error ? error.message : "Indexing failed");
     }
@@ -683,9 +732,16 @@ export default function Home() {
           <div className="pipeline"><span>INGEST</span><i>→</i><span>CHUNK</span><i>→</i><span>INDEX</span><i>→</i><span>RETRIEVE</span></div>
         </div>
         <div className="ingest-card">
+          <div className="collection-create">
+            <label>NEW COLLECTION ID<input value={newCollection.id} onChange={(event) => setNewCollection({...newCollection, id: event.target.value})} placeholder="payments-platform" /></label>
+            <label>DISPLAY NAME<input value={newCollection.name} onChange={(event) => setNewCollection({...newCollection, name: event.target.value})} placeholder="Payments platform" /></label>
+            <button onClick={createCollection} disabled={!newCollection.id || !newCollection.name}>Create</button>
+          </div>
+          <label>INDEX INTO COLLECTION<select value={ingestCollectionId} onChange={(event) => setIngestCollectionId(event.target.value)}>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name} · {collection.documents} docs</option>)}</select></label>
           <label>DOCUMENT SOURCE<input value={source} onChange={(event) => setSource(event.target.value)} /></label>
           <label>KNOWLEDGE<textarea rows={6} value={knowledgeText} onChange={(event) => setKnowledgeText(event.target.value)} placeholder="Paste a runbook, postmortem, or operational note…" /></label>
           <div><span>{indexStatus || "SQLite FTS5 · SHA-256 deduplication"}</span><button onClick={indexKnowledge}>Index document <b>→</b></button></div>
+          <fieldset className="collection-scope"><legend>ACTIVE FOR INVESTIGATIONS</legend>{collections.map((collection) => <label key={collection.id} htmlFor={`collection-${collection.id}`} aria-label={`Use ${collection.name} for investigations`}><input id={`collection-${collection.id}`} type="checkbox" checked={selectedCollectionIds.includes(collection.id)} onChange={() => toggleCollection(collection.id)} /><span><strong>{collection.name}</strong><small>{collection.documents} document{collection.documents === 1 ? "" : "s"}</small></span></label>)}</fieldset>
         </div>
       </section>
 

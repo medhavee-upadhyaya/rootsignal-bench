@@ -88,3 +88,17 @@ test("supports guided and validated JSON incident imports", async () => {
   assert.match(catalogRoute, /export async function POST/);
   assert.match(catalogRoute, /\/v1\/incidents/);
 });
+
+test("scopes persistent knowledge collections to investigations", async () => {
+  const [page, collectionsRoute, investigationRoute] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/collections/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /ACTIVE FOR INVESTIGATIONS/);
+  assert.match(page, /selectedCollectionIds/);
+  assert.match(page, /INDEX INTO COLLECTION/);
+  assert.match(collectionsRoute, /\/v1\/knowledge\/collections/);
+  assert.match(investigationRoute, /collection_ids/);
+});
