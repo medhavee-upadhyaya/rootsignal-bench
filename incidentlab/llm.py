@@ -49,8 +49,15 @@ class OpenAICompatibleClient:
 
     def healthy(self) -> bool:
         try:
-            with urllib.request.urlopen(self.base_url + "/health", timeout=2) as response:
-                return response.status == 200
+            with urllib.request.urlopen(self.base_url + "/v1/models", timeout=2) as response:
+                if response.status != 200:
+                    return False
+                payload = json.load(response)
+            models = payload.get("data", []) if isinstance(payload, dict) else []
+            return any(
+                isinstance(item, dict) and item.get("id") == self.model
+                for item in models
+            )
         except Exception:
             return False
 

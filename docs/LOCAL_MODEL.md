@@ -4,6 +4,8 @@ The working development configuration uses Qwen3 1.7B in GGUF format through lla
 
 The local runtime and model are intentionally stored under `work/` and excluded from Git because together they exceed 500 MB. The API is configured through `INCIDENTLAB_LLM_URL` and `INCIDENTLAB_MODEL`, so hosted endpoints and vLLM can replace the laptop server without application changes.
 
+Readiness uses the OpenAI-compatible `GET /v1/models` contract and only enables model runs when `INCIDENTLAB_MODEL` appears in the returned model list. A reachable server with the wrong model loaded is intentionally reported as unavailable.
+
 For a public benchmark result, record the exact model digest, quantization, context size, hardware, prompt digest, code revision, latency, token counts, and evaluation schema. Do not compare the oracle-backed deterministic plumbing baseline to a model-backed run.
 
 Run a live-model evaluation with:
