@@ -40,7 +40,8 @@ test("distinguishes oracle-backed controls from independent model runs", async (
 
   assert.match(page, /Oracle-backed reference/);
   assert.match(page, /Oracle hidden from agent/);
-  assert.match(page, /Model endpoint is offline or not configured/);
+  assert.match(page, /system\?\.llm\.message/);
+  assert.match(page, /model_not_loaded/);
   assert.match(page, /INCIDENTLAB_LLM_URL/);
   assert.match(page, /LOCAL MODEL SETUP/);
   assert.match(page, /ollama serve/);

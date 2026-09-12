@@ -28,7 +28,7 @@ type IncidentCatalog = { schema_version: string; count: number; incidents: Incid
 type KnowledgeCollection = { id: string; name: string; description: string; documents: number };
 type ExecutionMode = "baseline" | "model";
 type SystemStatus = {
-  llm: { provider: string; model: string; healthy: boolean };
+  llm: { provider: string; model: string; healthy: boolean; status: "ready" | "server_error" | "incompatible_server" | "model_not_loaded" | "server_unreachable"; message: string };
   execution_modes: {
     baseline: { available: boolean; oracle_backed: boolean; purpose: string };
     model: { available: boolean; oracle_backed: boolean; purpose: string };
@@ -552,7 +552,7 @@ export default function Home() {
           })}
         </ol>
         <div className={`guided-next ${guidedWorkflow.complete ? "complete" : ""}`}>
-          {guidedWorkflow.complete ? <><strong>Evaluation complete</strong><span>You created a control, an agent run, a fair comparison, and portable evidence.</span></> : guidedWorkflow.current === "agent" && !system?.llm.healthy ? <><strong>Connect a model to continue</strong><span>Start your OpenAI-compatible endpoint, then recheck its health.</span><button onClick={refreshSystem} disabled={systemLoading}>{systemLoading ? "Checking…" : "Recheck model"}</button></> : guidedWorkflow.current === "export" && comparison ? <><strong>Evidence is ready</strong><span>Download the signed run data and comparison scorecard.</span><a href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`} onClick={() => setGuidedExported(true)}>Export evidence ↓</a></> : <><strong>Next: {guidedWorkflow.steps.find((step) => step.id === guidedWorkflow.current)?.id}</strong><span>{guidedWorkflow.completedCount} of 6 verified steps complete.</span><button onClick={() => guidedWorkflow.current && continueGuidedWorkflow(guidedWorkflow.current)}>Continue →</button></>}
+          {guidedWorkflow.complete ? <><strong>Evaluation complete</strong><span>You created a control, an agent run, a fair comparison, and portable evidence.</span></> : guidedWorkflow.current === "agent" && !system?.llm.healthy ? <><strong>Connect a model to continue</strong><span>{system?.llm.message || "Start the RootSignal API, then verify model readiness."}</span><button onClick={refreshSystem} disabled={systemLoading}>{systemLoading ? "Checking…" : "Recheck model"}</button></> : guidedWorkflow.current === "export" && comparison ? <><strong>Evidence is ready</strong><span>Download the signed run data and comparison scorecard.</span><a href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`} onClick={() => setGuidedExported(true)}>Export evidence ↓</a></> : <><strong>Next: {guidedWorkflow.steps.find((step) => step.id === guidedWorkflow.current)?.id}</strong><span>{guidedWorkflow.completedCount} of 6 verified steps complete.</span><button onClick={() => guidedWorkflow.current && continueGuidedWorkflow(guidedWorkflow.current)}>Continue →</button></>}
         </div>
       </section>
 
@@ -626,11 +626,11 @@ export default function Home() {
           >
             <span>AGENT</span>
             <strong>{system?.llm.model || "Connected model"}</strong>
-            <small>{system?.llm.healthy ? "Grounded model run using tools and retrieved evidence." : "Model endpoint is offline or not configured."}</small>
+            <small>{system?.llm.healthy ? "Grounded model run using tools and retrieved evidence." : system?.llm.message || "RootSignal API is unavailable."}</small>
           </button>
           <div className="connection-state">
             <span className={system?.llm.healthy ? "online" : "offline"}>
-              <i /> {systemLoading ? "Checking model" : system?.llm.healthy ? "Model online" : "Model offline"}
+              <i /> {systemLoading ? "Checking model" : system?.llm.healthy ? "Model online" : system?.llm.status === "model_not_loaded" ? "Model not loaded" : "Model offline"}
             </span>
             <div><button onClick={() => setShowModelSetup(!showModelSetup)}>{showModelSetup ? "Hide setup" : "Setup"}</button><button onClick={refreshSystem} disabled={systemLoading}>Refresh</button></div>
           </div>

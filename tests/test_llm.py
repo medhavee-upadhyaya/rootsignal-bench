@@ -27,7 +27,9 @@ class OpenAICompatibleHealthTests(unittest.TestCase):
             "incidentlab.llm.urllib.request.urlopen",
             return_value=ModelListResponse(["qwen3:1.7b", "embedding-model"]),
         ) as request:
-            self.assertTrue(client.healthy())
+            readiness = client.probe()
+            self.assertTrue(readiness.healthy)
+            self.assertEqual(readiness.status, "ready")
         request.assert_called_once_with("http://model.local/v1/models", timeout=2)
 
     def test_health_rejects_reachable_server_without_configured_model(self) -> None:
@@ -36,7 +38,10 @@ class OpenAICompatibleHealthTests(unittest.TestCase):
             "incidentlab.llm.urllib.request.urlopen",
             return_value=ModelListResponse(["another-model"]),
         ):
-            self.assertFalse(client.healthy())
+            readiness = client.probe()
+            self.assertFalse(readiness.healthy)
+            self.assertEqual(readiness.status, "model_not_loaded")
+            self.assertIn("missing-model", readiness.message)
 
     def test_health_fails_closed_on_invalid_or_unreachable_responses(self) -> None:
         client = OpenAICompatibleClient("http://model.local", "qwen3:1.7b")
@@ -44,12 +49,12 @@ class OpenAICompatibleHealthTests(unittest.TestCase):
             "incidentlab.llm.urllib.request.urlopen",
             return_value=io.BytesIO(b"not-json"),
         ):
-            self.assertFalse(client.healthy())
+            self.assertEqual(client.probe().status, "incompatible_server")
         with patch(
             "incidentlab.llm.urllib.request.urlopen",
             side_effect=OSError("offline"),
         ):
-            self.assertFalse(client.healthy())
+            self.assertEqual(client.probe().status, "server_unreachable")
 
 
 if __name__ == "__main__":

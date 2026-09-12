@@ -15,6 +15,13 @@ class Generation:
     completion_tokens: int
 
 
+@dataclass(frozen=True)
+class ModelReadiness:
+    healthy: bool
+    status: str
+    message: str
+
+
 class OpenAICompatibleClient:
     def __init__(self, base_url: str = "http://127.0.0.1:11434", model: str = "qwen3:0.6b") -> None:
         self.base_url = base_url.rstrip("/")
@@ -47,19 +54,32 @@ class OpenAICompatibleClient:
             completion_tokens=int(body.get("usage", {}).get("completion_tokens", 0)),
         )
 
-    def healthy(self) -> bool:
+    def probe(self) -> ModelReadiness:
         try:
-            with urllib.request.urlopen(self.base_url + "/v1/models", timeout=2) as response:
+            response = urllib.request.urlopen(self.base_url + "/v1/models", timeout=2)
+        except Exception:
+            return ModelReadiness(False, "server_unreachable", "Start the model server and verify its port.")
+        try:
+            with response:
                 if response.status != 200:
-                    return False
+                    return ModelReadiness(False, "server_error", "Model server returned an unhealthy status.")
                 payload = json.load(response)
             models = payload.get("data", []) if isinstance(payload, dict) else []
-            return any(
-                isinstance(item, dict) and item.get("id") == self.model
+            if not isinstance(models, list):
+                return ModelReadiness(False, "incompatible_server", "Model server returned an invalid model catalog.")
+            available = {
+                str(item["id"])
                 for item in models
-            )
+                if isinstance(item, dict) and isinstance(item.get("id"), str)
+            }
+            if self.model not in available:
+                return ModelReadiness(False, "model_not_loaded", f"Load the configured model: {self.model}.")
+            return ModelReadiness(True, "ready", f"{self.model} is loaded and ready.")
         except Exception:
-            return False
+            return ModelReadiness(False, "incompatible_server", "Model server returned an invalid model catalog.")
+
+    def healthy(self) -> bool:
+        return self.probe().healthy
 
 
 # Backwards-compatible name retained for integrations created against v0.1.

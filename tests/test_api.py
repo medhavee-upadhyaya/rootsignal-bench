@@ -165,6 +165,8 @@ class APITests(unittest.TestCase):
         self.assertTrue(payload["execution_modes"]["baseline"]["oracle_backed"])
         self.assertFalse(payload["execution_modes"]["model"]["oracle_backed"])
         self.assertEqual(payload["llm"]["configuration"]["endpoint_env"], "INCIDENTLAB_LLM_URL")
+        self.assertIn(payload["llm"]["status"], {"ready", "server_error", "incompatible_server", "model_not_loaded", "server_unreachable"})
+        self.assertTrue(payload["llm"]["message"])
         self.assertNotIn("base_url", payload["llm"])
         self.assertIn("search_runbooks", payload["tools"])
 

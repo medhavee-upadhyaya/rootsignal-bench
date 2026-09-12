@@ -263,12 +263,14 @@ def health() -> dict[str, str]:
 
 @app.get("/readyz")
 def readiness():
-    model_server = LLM.healthy()
-    ready = FIXTURE_ROOT.exists() and model_server
+    model_readiness = LLM.probe()
+    ready = FIXTURE_ROOT.exists() and model_readiness.healthy
     content = {
         "status": "ready" if ready else "not_ready",
         "model": LLM.model,
-        "model_server": model_server,
+        "model_server": model_readiness.healthy,
+        "model_status": model_readiness.status,
+        "model_message": model_readiness.message,
         "knowledge": KNOWLEDGE.stats(),
     }
     if not ready:
@@ -278,12 +280,14 @@ def readiness():
 
 @app.get("/v1/system")
 def system() -> dict[str, object]:
-    model_healthy = LLM.healthy()
+    model_readiness = LLM.probe()
     return {
         "llm": {
             "provider": "openai-compatible",
             "model": LLM.model,
-            "healthy": model_healthy,
+            "healthy": model_readiness.healthy,
+            "status": model_readiness.status,
+            "message": model_readiness.message,
             "configuration": {
                 "endpoint_env": "INCIDENTLAB_LLM_URL",
                 "model_env": "INCIDENTLAB_MODEL",
@@ -296,7 +300,7 @@ def system() -> dict[str, object]:
                 "purpose": "Reproducible control run for pipeline verification",
             },
             "model": {
-                "available": model_healthy,
+                "available": model_readiness.healthy,
                 "oracle_backed": False,
                 "purpose": "Grounded agent run for evaluation",
             },
