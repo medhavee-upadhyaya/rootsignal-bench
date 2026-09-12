@@ -126,6 +126,8 @@ export default function Home() {
   const [completedMode, setCompletedMode] = useState<ExecutionMode | null>(null);
   const [system, setSystem] = useState<SystemStatus | null>(null);
   const [systemLoading, setSystemLoading] = useState(true);
+  const [showModelSetup, setShowModelSetup] = useState(false);
+  const [copiedCommand, setCopiedCommand] = useState("");
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState("");
   const [activeTab, setActiveTab] = useState<"evidence" | "remediation">("evidence");
@@ -195,6 +197,16 @@ export default function Home() {
       setSystem(null);
     } finally {
       setSystemLoading(false);
+    }
+  }
+
+  async function copySetupCommand(label: string, command: string) {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopiedCommand(label);
+      window.setTimeout(() => setCopiedCommand(""), 1800);
+    } catch {
+      setCopiedCommand("Copy unavailable");
     }
   }
 
@@ -620,12 +632,20 @@ export default function Home() {
             <span className={system?.llm.healthy ? "online" : "offline"}>
               <i /> {systemLoading ? "Checking model" : system?.llm.healthy ? "Model online" : "Model offline"}
             </span>
-            <button onClick={refreshSystem} disabled={systemLoading}>Refresh</button>
+            <div><button onClick={() => setShowModelSetup(!showModelSetup)}>{showModelSetup ? "Hide setup" : "Setup"}</button><button onClick={refreshSystem} disabled={systemLoading}>Refresh</button></div>
           </div>
         </div>
-        {mode === "model" && !system?.llm.healthy && (
-          <div className="connection-help">
-            Start an OpenAI-compatible server, then configure <code>INCIDENTLAB_LLM_URL</code> and <code>INCIDENTLAB_MODEL</code> on the API.
+        {(showModelSetup || (mode === "model" && !system?.llm.healthy)) && (
+          <div className="model-setup" aria-label="Model setup">
+            <div className="model-setup-heading"><div><span>LOCAL MODEL SETUP</span><strong>Connect private inference in three terminals</strong><small>No browser API key. Prompts and incident data stay on your machine.</small></div><span className={system?.llm.healthy ? "ready" : "waiting"}>{system?.llm.healthy ? "✓ READY" : "○ WAITING"}</span></div>
+            <ol>
+              {[
+                ["1", "Start Ollama", "ollama serve"],
+                ["2", "Download the model once", `ollama pull ${system?.llm.model || "qwen3:1.7b"}`],
+                ["3", "Restart the RootSignal API", `INCIDENTLAB_LLM_URL=http://127.0.0.1:11434 INCIDENTLAB_MODEL=${system?.llm.model || "qwen3:1.7b"} uvicorn incidentlab.api:app --reload`],
+              ].map(([number, label, command]) => <li key={number}><span>{number}</span><div><strong>{label}</strong><code>{command}</code></div><button onClick={() => copySetupCommand(label, command)}>{copiedCommand === label ? "Copied ✓" : "Copy"}</button></li>)}
+            </ol>
+            <div className="model-setup-footer"><span>Already running another OpenAI-compatible server? Replace the URL and model values in step 3.</span><button onClick={refreshSystem} disabled={systemLoading}>{systemLoading ? "Checking connection…" : "Verify connection →"}</button></div>
           </div>
         )}
         <div className="command-row">

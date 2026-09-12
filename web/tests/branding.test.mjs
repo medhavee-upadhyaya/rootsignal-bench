@@ -42,6 +42,10 @@ test("distinguishes oracle-backed controls from independent model runs", async (
   assert.match(page, /Oracle hidden from agent/);
   assert.match(page, /Model endpoint is offline or not configured/);
   assert.match(page, /INCIDENTLAB_LLM_URL/);
+  assert.match(page, /LOCAL MODEL SETUP/);
+  assert.match(page, /ollama serve/);
+  assert.match(page, /Verify connection/);
+  assert.match(page, /No browser API key/);
   assert.match(systemRoute, /\/v1\/system/);
   assert.match(investigationRoute, /Execution mode must be baseline or model/);
 });
