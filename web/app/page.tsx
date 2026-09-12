@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getGuidedWorkflow, type GuidedStepId } from "@/lib/guided-workflow";
 
 type Evidence = { source: string; content: string; relevance: number };
 type ToolCall = { name: string; arguments: Record<string, string> };
@@ -145,6 +146,9 @@ export default function Home() {
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState("");
+  const [guidedControlRunId, setGuidedControlRunId] = useState<string | null>(null);
+  const [guidedAgentRunId, setGuidedAgentRunId] = useState<string | null>(null);
+  const [guidedExported, setGuidedExported] = useState(false);
   const [showCreator, setShowCreator] = useState(false);
   const [creatorMode, setCreatorMode] = useState<"guided" | "json">("guided");
   const [creatorStatus, setCreatorStatus] = useState("");
@@ -271,6 +275,21 @@ export default function Home() {
     }, {});
   }, [result]);
 
+  const guidedComparisonComplete = Boolean(
+    comparison && guidedControlRunId && guidedAgentRunId
+    && comparison.reference.run.run_id === guidedControlRunId
+    && comparison.candidate.run.run_id === guidedAgentRunId,
+  );
+  const guidedWorkflow = getGuidedWorkflow({
+    incidentId: selectedIncidentId,
+    collectionCount: selectedCollectionIds.length,
+    controlRunId: guidedControlRunId,
+    agentRunId: guidedAgentRunId,
+    modelAvailable: Boolean(system?.llm.healthy),
+    comparisonComplete: guidedComparisonComplete,
+    exported: guidedExported,
+  });
+
   async function investigate() {
     if (!selectedIncidentId) return;
     setRunning(true);
@@ -291,8 +310,23 @@ export default function Home() {
       setResult(payload);
       setCompletedMode(mode);
       setActiveRunId(payload.record?.run_id ?? null);
+      if (payload.record?.run_id && mode === "baseline") {
+        setGuidedControlRunId(payload.record.run_id);
+        setGuidedAgentRunId(null);
+        setGuidedExported(false);
+        setComparison(null);
+      } else if (payload.record?.run_id && mode === "model") {
+        setGuidedAgentRunId(payload.record.run_id);
+        setGuidedExported(false);
+        setComparison(null);
+        if (guidedControlRunId) {
+          setReferenceRunId(guidedControlRunId);
+          setCandidateRunId(payload.record.run_id);
+        }
+      }
       await refreshRuns();
       if (payload.record?.run_id) await loadRun(payload.record.run_id, false);
+      if (mode === "baseline" && system?.llm.healthy) setMode("model");
     } catch (error) {
       setResult(null);
       setRunError(error instanceof Error ? error.message : "Investigation failed");
@@ -310,6 +344,10 @@ export default function Home() {
     setActiveRunId(null);
     setActiveRun(null);
     setRunError("");
+    setGuidedControlRunId(null);
+    setGuidedAgentRunId(null);
+    setGuidedExported(false);
+    setComparison(null);
   }
 
   function selectMode(nextMode: ExecutionMode) {
@@ -351,15 +389,15 @@ export default function Home() {
     setComparisonError("");
   }
 
-  async function compareSelectedRuns() {
-    if (!referenceRunId || !candidateRunId) return;
+  async function compareSelectedRuns(referenceId = referenceRunId, candidateId = candidateRunId) {
+    if (!referenceId || !candidateId) return;
     setComparisonLoading(true);
     setComparisonError("");
     try {
       const response = await fetch("/api/compare", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reference_run_id: referenceRunId, candidate_run_id: candidateRunId }),
+        body: JSON.stringify({ reference_run_id: referenceId, candidate_run_id: candidateId }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || "Comparison failed");
@@ -369,6 +407,30 @@ export default function Home() {
       setComparisonError(error instanceof Error ? error.message : "Comparison failed");
     } finally {
       setComparisonLoading(false);
+    }
+  }
+
+  function startCompleteExample() {
+    const example = catalog?.incidents.find((incident) => incident.id.includes("checkout")) ?? catalog?.incidents[0];
+    if (!example) return;
+    selectIncident(example.id);
+    setSelectedCollectionIds(["incident-runbooks"]);
+    setMode("baseline");
+    document.getElementById("guided-workflow")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function continueGuidedWorkflow(step: GuidedStepId) {
+    if (step === "incident") return document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    if (step === "knowledge") return document.getElementById("knowledge")?.scrollIntoView({ behavior: "smooth" });
+    if (step === "control" || step === "agent") {
+      selectMode(step === "control" ? "baseline" : "model");
+      return document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    }
+    if (step === "compare" && guidedControlRunId && guidedAgentRunId) {
+      setReferenceRunId(guidedControlRunId);
+      setCandidateRunId(guidedAgentRunId);
+      void compareSelectedRuns(guidedControlRunId, guidedAgentRunId);
+      return document.getElementById("runs")?.scrollIntoView({ behavior: "smooth" });
     }
   }
 
@@ -457,6 +519,28 @@ export default function Home() {
           <div><strong>{catalog?.count ?? "—"}</strong><span>replayable incidents</span></div>
           <div><strong>{benchmark ? `${Math.round(benchmark.aggregate.tool_selection * 100)}%` : "—"}</strong><span>tool selection</span></div>
           <div><strong>4</strong><span>audited tool types</span></div>
+        </div>
+      </section>
+
+      <section className="guided-workflow" id="guided-workflow" aria-label="Guided evaluation workflow">
+        <div className="guided-heading">
+          <div><p>FIRST RUN</p><h2>From incident to verified evidence</h2><span>Complete one evaluation with real saved artifacts at every step.</span></div>
+          <button onClick={startCompleteExample}>Try complete example →</button>
+        </div>
+        <ol className="guided-steps">
+          {guidedWorkflow.steps.map((step, index) => {
+            const labels = ["Choose incident", "Select knowledge", "Run control", "Run agent", "Compare", "Export"];
+            return <li key={step.id} className={step.status} aria-current={step.status === "current" || step.status === "blocked" ? "step" : undefined}>
+              <button onClick={() => continueGuidedWorkflow(step.id)} disabled={step.status === "pending" || step.status === "complete"}>
+                <span>{step.status === "complete" ? "✓" : String(index + 1).padStart(2, "0")}</span>
+                <strong>{labels[index]}</strong>
+                <small>{step.status === "blocked" ? "Model connection required" : step.status}</small>
+              </button>
+            </li>;
+          })}
+        </ol>
+        <div className={`guided-next ${guidedWorkflow.complete ? "complete" : ""}`}>
+          {guidedWorkflow.complete ? <><strong>Evaluation complete</strong><span>You created a control, an agent run, a fair comparison, and portable evidence.</span></> : guidedWorkflow.current === "agent" && !system?.llm.healthy ? <><strong>Connect a model to continue</strong><span>Start your OpenAI-compatible endpoint, then recheck its health.</span><button onClick={refreshSystem} disabled={systemLoading}>{systemLoading ? "Checking…" : "Recheck model"}</button></> : guidedWorkflow.current === "export" && comparison ? <><strong>Evidence is ready</strong><span>Download the signed run data and comparison scorecard.</span><a href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`} onClick={() => setGuidedExported(true)}>Export evidence ↓</a></> : <><strong>Next: {guidedWorkflow.steps.find((step) => step.id === guidedWorkflow.current)?.id}</strong><span>{guidedWorkflow.completedCount} of 6 verified steps complete.</span><button onClick={() => guidedWorkflow.current && continueGuidedWorkflow(guidedWorkflow.current)}>Continue →</button></>}
         </div>
       </section>
 
@@ -686,7 +770,7 @@ export default function Home() {
                 return run.run_id !== referenceRunId && run.incident_id === reference?.incident_id && run.fixture_sha256 === reference?.fixture_sha256;
               }).map((run) => <option value={run.run_id} key={run.run_id}>{run.model} · {run.mode} · {run.run_id.slice(0, 8)}</option>)}
             </select></label>
-            <button onClick={compareSelectedRuns} disabled={!referenceRunId || !candidateRunId || comparisonLoading}>{comparisonLoading ? "Comparing…" : "Compare runs"}</button>
+            <button onClick={() => compareSelectedRuns()} disabled={!referenceRunId || !candidateRunId || comparisonLoading}>{comparisonLoading ? "Comparing…" : "Compare runs"}</button>
           </div>
           {comparisonError && <p className="comparison-error" role="alert">{comparisonError}</p>}
           {comparison && (
@@ -695,7 +779,7 @@ export default function Home() {
                 <span>CANDIDATE VERDICT</span>
                 <strong>{comparison.verdict}</strong>
                 {comparison.reasons.map((reason) => <p key={reason}>{reason}</p>)}
-                <a className="comparison-export" href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`}>Export verified evidence ↓</a>
+                <a className="comparison-export" href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`} onClick={() => guidedComparisonComplete && setGuidedExported(true)}>Export verified evidence ↓</a>
               </div>
               <div className="comparison-table">
                 <div className="comparison-row header"><span>Metric</span><span>Reference</span><span>Candidate</span><span>Delta</span></div>
