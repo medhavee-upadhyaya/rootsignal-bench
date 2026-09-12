@@ -4,10 +4,12 @@ import io
 import json
 import unittest
 import urllib.error
+import uuid
 from unittest.mock import patch
 
 try:
     from incidentlab.api import METRICS
+    from incidentlab.evidence_bundle import verify_evidence_bundle
     from tests.test_api import asgi_request
 except (ImportError, RuntimeError):
     METRICS = None  # type: ignore[assignment]
@@ -66,6 +68,69 @@ class OpenAIProvider:
 
 @unittest.skipIf(METRICS is None, "API dependencies are not installed")
 class FullStackInvestigationTests(unittest.TestCase):
+    def test_new_user_journey_creates_verifiable_comparison_evidence(self) -> None:
+        collection_id = f"journey-{uuid.uuid4().hex}"
+        status, _, collection = asgi_request(
+            "POST",
+            "/v1/knowledge/collections",
+            body={"id": collection_id, "name": "Checkout operations"},
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(collection["id"], collection_id)
+
+        status, _, indexed = asgi_request(
+            "POST",
+            "/v1/knowledge",
+            body={
+                "collection_id": collection_id,
+                "source": "runbook/checkout-pool",
+                "text": (
+                    "If checkout latency follows a deployment, compare DB_POOL_SIZE with the "
+                    "previous release and restore the last safe value before scaling replicas. "
+                    f"Acceptance journey {collection_id}."
+                ),
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertGreater(indexed["chunks"], 0)
+
+        request = {
+            "incident_id": "checkout-latency-001",
+            "collection_ids": ["incident-runbooks", collection_id],
+        }
+        status, _, control = asgi_request(
+            "POST", "/v1/baselines/deterministic", body=request
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(control["record"]["mode"], "baseline")
+
+        provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):
+            status, _, agent = asgi_request("POST", "/v1/investigations", body=request)
+        self.assertEqual(status, 200)
+        self.assertEqual(agent["record"]["mode"], "model")
+
+        control_id = control["record"]["run_id"]
+        agent_id = agent["record"]["run_id"]
+        status, _, comparison = asgi_request(
+            "POST",
+            "/v1/comparisons",
+            body={"reference_run_id": control_id, "candidate_run_id": agent_id},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(comparison["reference"]["run"]["run_id"], control_id)
+        self.assertEqual(comparison["candidate"]["run"]["run_id"], agent_id)
+        self.assertIn(comparison["verdict"], {"improved", "regressed", "unchanged"})
+
+        status, headers, bundle = asgi_request(
+            "GET", f"/v1/runs/{control_id}/export?compare_to={agent_id}"
+        )
+        self.assertEqual(status, 200)
+        self.assertIn(control_id, headers["content-disposition"])
+        self.assertTrue(verify_evidence_bundle(bundle))
+        self.assertEqual(bundle["comparison"]["candidate"]["run"]["run_id"], agent_id)
+        self.assertNotIn('"oracle"', json.dumps(bundle).lower())
+
     def test_public_api_runs_model_tools_rag_citations_and_metrics(self) -> None:
         provider = OpenAIProvider()
         before = METRICS.snapshot()

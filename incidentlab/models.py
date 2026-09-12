@@ -9,6 +9,15 @@ class ToolCall:
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_record(cls, payload: dict[str, Any]) -> "ToolCall":
+        """Restore the scoring shape while preserving forward-compatible run records."""
+        arguments = payload.get("arguments", {})
+        return cls(
+            name=str(payload["name"]),
+            arguments=dict(arguments) if isinstance(arguments, dict) else {},
+        )
+
 
 @dataclass(frozen=True)
 class Evidence:

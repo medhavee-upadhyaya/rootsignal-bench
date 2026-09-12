@@ -24,7 +24,7 @@ def _result(payload: dict[str, Any]) -> InvestigationResult:
         confidence=float(payload.get("confidence", 0)),
         evidence=[Evidence(**item) for item in payload.get("evidence", [])],
         remediation=[str(item) for item in payload.get("remediation", [])],
-        tool_calls=[ToolCall(**item) for item in payload.get("tool_calls", [])],
+        tool_calls=[ToolCall.from_record(item) for item in payload.get("tool_calls", [])],
         limitations=[str(item) for item in payload.get("limitations", [])],
     )
 
