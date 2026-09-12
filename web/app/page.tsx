@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getGuidedWorkflow, type GuidedStepId } from "@/lib/guided-workflow";
+import { findControlAgentPair } from "@/lib/run-pairing";
 
 type Evidence = { source: string; content: string; relevance: number };
 type ToolCall = { name: string; arguments: Record<string, string> };
@@ -263,16 +264,10 @@ export default function Home() {
   }
 
   function chooseComparablePair(runs: RunSummary[]) {
-    for (const candidate of runs) {
-      const reference = runs.find(
-        (run) => run.run_id !== candidate.run_id && run.incident_id === candidate.incident_id && run.fixture_sha256 === candidate.fixture_sha256,
-      );
-      if (reference) {
-        setReferenceRunId((current) => current || reference.run_id);
-        setCandidateRunId((current) => current || candidate.run_id);
-        return;
-      }
-    }
+    const pair = findControlAgentPair(runs);
+    if (!pair) return;
+    setReferenceRunId((current) => current || pair.referenceRunId);
+    setCandidateRunId((current) => current || pair.candidateRunId);
   }
 
   const selectedIncident = useMemo(
@@ -775,7 +770,7 @@ export default function Home() {
         <div className="comparison-workspace">
           <div className="comparison-heading">
             <div><span>REGRESSION ANALYSIS</span><h3>Compare experiments</h3></div>
-            <p>Fair comparisons require the same incident and fixture revision. The candidate is judged against the reference.</p>
+            <p>Automatic pairing selects a control and agent with the same incident and fixture revision. Choose runs manually for model-to-model regression analysis.</p>
           </div>
           <div className="comparison-controls">
             <label>REFERENCE RUN<select aria-label="Reference run" value={referenceRunId} onChange={(event) => selectReference(event.target.value)}>

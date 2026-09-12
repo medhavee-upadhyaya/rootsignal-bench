@@ -74,6 +74,7 @@ test("supports fixture-matched regression comparisons", async () => {
 
   assert.match(page, /REGRESSION ANALYSIS/);
   assert.match(page, /same incident and fixture revision/);
+  assert.match(page, /findControlAgentPair/);
   assert.match(page, /CANDIDATE VERDICT/);
   assert.match(page, /comparison\.deltas\.latency_ms/);
   assert.match(compareRoute, /\/v1\/comparisons/);
