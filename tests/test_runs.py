@@ -49,6 +49,26 @@ class RunStoreTests(unittest.TestCase):
             self.assertEqual(len(store.list(limit=2)), 2)
             self.assertEqual(len(store.list(limit=1000)), 3)
 
+    def test_cursor_pagination_is_stable_and_has_no_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = RunStore(Path(directory) / "runs.db")
+            saved = []
+            for index in range(5):
+                saved.append(store.save(
+                    incident_id=f"incident-{index}", incident_title=f"Incident {index}",
+                    mode="baseline", model="deterministic-v1", query="Investigate",
+                    fixture_sha256="c" * 64, result={}, metadata={},
+                )["run_id"])
+            first = store.list(limit=2)
+            second = store.list(limit=2, cursor=first[-1]["run_id"])
+            third = store.list(limit=2, cursor=second[-1]["run_id"])
+            observed = [item["run_id"] for item in [*first, *second, *third]]
+            self.assertEqual(len(observed), 5)
+            self.assertEqual(len(set(observed)), 5)
+            self.assertEqual(set(observed), set(saved))
+            with self.assertRaisesRegex(ValueError, "Unknown run cursor"):
+                store.list(cursor="missing")
+
 
 if __name__ == "__main__":
     unittest.main()

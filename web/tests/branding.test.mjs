@@ -59,11 +59,14 @@ test("exposes durable experiment history and run restoration", async () => {
 
   assert.match(page, /REPRODUCIBLE EXPERIMENTS/);
   assert.match(page, /loadRun\(run\.run_id\)/);
+  assert.match(page, /Load more experiments/);
+  assert.match(page, /historyCursor/);
   assert.match(page, /incident hash/);
   assert.match(page, /Reproducibility manifest/);
   assert.match(page, /INCIDENT SHA-256/);
   assert.match(runsRoute, /\/v1\/runs/);
   assert.match(runsRoute, /encodeURIComponent\(runId\)/);
+  assert.match(runsRoute, /encodeURIComponent\(cursor\)/);
 });
 
 test("supports fixture-matched regression comparisons", async () => {

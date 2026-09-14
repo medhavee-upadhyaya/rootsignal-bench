@@ -363,9 +363,19 @@ def incident_detail(incident_id: str) -> dict[str, object]:
 
 
 @app.get("/v1/runs")
-def list_runs(limit: int = 20) -> dict[str, object]:
-    runs = RUNS.list(limit)
-    return {"count": len(runs), "runs": runs}
+def list_runs(limit: int = 20, cursor: str | None = None) -> dict[str, object]:
+    safe_limit = min(max(limit, 1), 100)
+    try:
+        page = RUNS.list(safe_limit + 1, cursor)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    has_more = len(page) > safe_limit
+    runs = page[:safe_limit]
+    return {
+        "count": len(runs),
+        "runs": runs,
+        "next_cursor": runs[-1]["run_id"] if has_more and runs else None,
+    }
 
 
 @app.get("/v1/runs/{run_id}")

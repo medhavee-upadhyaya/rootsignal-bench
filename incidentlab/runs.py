@@ -93,17 +93,36 @@ class RunStore:
             )
         return {"run_id": run_id, "created_at": created_at, "mode": mode}
 
-    def list(self, limit: int = 20) -> list[dict[str, Any]]:
-        safe_limit = min(max(limit, 1), 100)
+    def list(self, limit: int = 20, cursor: str | None = None) -> list[dict[str, Any]]:
+        safe_limit = min(max(limit, 1), 101)
         with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT run_id, created_at, incident_id, incident_title, mode, model,
-                       fixture_sha256, result_json, metadata_json
-                FROM experiment_runs ORDER BY created_at DESC, run_id DESC LIMIT ?
-                """,
-                (safe_limit,),
-            ).fetchall()
+            boundary = None
+            if cursor:
+                boundary = connection.execute(
+                    "SELECT created_at, run_id FROM experiment_runs WHERE run_id = ?", (cursor,)
+                ).fetchone()
+                if boundary is None:
+                    raise ValueError("Unknown run cursor")
+            if boundary:
+                rows = connection.execute(
+                    """
+                    SELECT run_id, created_at, incident_id, incident_title, mode, model,
+                           fixture_sha256, result_json, metadata_json
+                    FROM experiment_runs
+                    WHERE created_at < ? OR (created_at = ? AND run_id < ?)
+                    ORDER BY created_at DESC, run_id DESC LIMIT ?
+                    """,
+                    (boundary["created_at"], boundary["created_at"], boundary["run_id"], safe_limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT run_id, created_at, incident_id, incident_title, mode, model,
+                           fixture_sha256, result_json, metadata_json
+                    FROM experiment_runs ORDER BY created_at DESC, run_id DESC LIMIT ?
+                    """,
+                    (safe_limit,),
+                ).fetchall()
         return [self._summary(row) for row in rows]
 
     def get(self, run_id: str) -> dict[str, Any] | None:

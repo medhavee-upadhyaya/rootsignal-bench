@@ -143,6 +143,8 @@ export default function Home() {
   const [benchmark, setBenchmark] = useState<Benchmark | null>(null);
   const [history, setHistory] = useState<RunSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeRun, setActiveRun] = useState<StoredRun | null>(null);
   const [referenceRunId, setReferenceRunId] = useState("");
@@ -256,11 +258,30 @@ export default function Home() {
       if (!response.ok) throw new Error("Run history unavailable");
       const payload = await response.json();
       setHistory(payload.runs);
+      setHistoryCursor(payload.next_cursor ?? null);
       chooseComparablePair(payload.runs);
     } catch {
       setHistory([]);
     } finally {
       setHistoryLoading(false);
+    }
+  }
+
+  async function loadMoreRuns() {
+    if (!historyCursor || historyLoadingMore) return;
+    setHistoryLoadingMore(true);
+    try {
+      const response = await fetch(`/api/runs?cursor=${encodeURIComponent(historyCursor)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load more runs");
+      const payload = await response.json();
+      const merged = [...history, ...payload.runs].filter((run, index, runs) => runs.findIndex((item) => item.run_id === run.run_id) === index);
+      setHistory(merged);
+      setHistoryCursor(payload.next_cursor ?? null);
+      chooseComparablePair(merged);
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : "Could not load more runs");
+    } finally {
+      setHistoryLoadingMore(false);
     }
   }
 
@@ -751,7 +772,7 @@ export default function Home() {
           <button onClick={refreshRuns} disabled={historyLoading}>{historyLoading ? "Loading…" : "Refresh history"}</button>
         </div>
         {history.length ? (
-          <div className="run-list">
+          <><div className="run-list">
             {history.map((run) => (
               <button className={activeRunId === run.run_id ? "active" : ""} onClick={() => loadRun(run.run_id)} key={run.run_id}>
                 <span className={`run-mode ${run.mode}`}>{run.mode === "baseline" ? "CONTROL" : "AGENT"}</span>
@@ -771,6 +792,8 @@ export default function Home() {
               </button>
             ))}
           </div>
+          {historyCursor && <button className="load-more-runs" onClick={loadMoreRuns} disabled={historyLoadingMore}>{historyLoadingMore ? "Loading…" : "Load more experiments ↓"}</button>}
+          </>
         ) : (
           <div className="runs-empty">{historyLoading ? "Loading saved experiments…" : "No saved runs yet. Complete a control or agent run to create the first experiment record."}</div>
         )}

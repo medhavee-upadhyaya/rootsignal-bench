@@ -178,6 +178,8 @@ textarea:read-only { color: #dbe2df; }
 .run-identity code { display: block; color: var(--green); font: 9px monospace; }
 .run-identity time { display: block; margin-top: 4px; color: var(--muted); font: 8px monospace; }
 .open-run { justify-self: end; color: var(--green); font: 700 8px monospace; }
+.load-more-runs { width: 100%; border: 1px solid var(--line); border-top: 0; background: #eceee6; color: var(--green); padding: 11px; font: 700 8px monospace; cursor: pointer; }
+.load-more-runs:disabled { opacity: .55; cursor: wait; }
 .runs-empty { padding: 35px; border: 1px dashed #bfc4b9; color: var(--muted); text-align: center; font-size: 12px; }
 .comparison-workspace { margin-top: 22px; border: 1px solid var(--line); background: var(--card); }
 .comparison-heading { display: flex; align-items: end; justify-content: space-between; gap: 25px; padding: 19px 20px; border-bottom: 1px solid var(--line); }
