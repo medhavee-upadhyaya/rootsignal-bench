@@ -213,6 +213,15 @@ textarea:read-only { color: #dbe2df; }
 .diagnosis-compare > div:first-child { border-right: 1px solid var(--line); }
 .diagnosis-compare span { color: var(--green); font: 700 7px monospace; letter-spacing: .1em; }
 .diagnosis-compare p { margin: 8px 0 0; font: 13px/1.45 Georgia, serif; }
+.experiment-alignment { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 20px; padding: 13px 20px; border-top: 1px solid var(--line); }
+.experiment-alignment > div:first-child span, .experiment-alignment > div:first-child strong { display: block; }
+.experiment-alignment > div:first-child span { color: var(--muted); font: 7px monospace; letter-spacing: .12em; }
+.experiment-alignment > div:first-child strong { margin-top: 3px; font-size: 11px; }
+.experiment-alignment p { margin: 0; color: var(--muted); font: 9px/1.45 monospace; }
+.experiment-alignment.matched { background: #effaf6; }
+.experiment-alignment.changed { background: #fff5ec; }
+.experiment-alignment.changed > div:first-child strong { color: #a13d2b; }
+.scope-diff code { display: block; max-width: 280px; overflow: hidden; color: var(--muted); font: 7px/1.6 monospace; text-overflow: ellipsis; white-space: nowrap; }
 .panel { background: var(--card); border: 1px solid var(--line); min-width: 0; }
 .panel-heading { padding: 22px 24px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
 .panel-heading > div:first-child { display: flex; align-items: center; gap: 13px; }
@@ -385,6 +394,7 @@ footer { border-top: 1px solid var(--line); padding: 23px 4.5vw; display: flex; 
   .verdict { border-right: 0; border-bottom: 1px solid var(--line); }
   .diagnosis-compare { grid-template-columns: 1fr; }
   .diagnosis-compare > div:first-child { border-right: 0; border-bottom: 1px solid var(--line); }
+  .experiment-alignment { grid-template-columns: 1fr; gap: 8px; }
   .workspace-grid { margin-left: 10px; margin-right: 10px; }
   .panel-heading { padding: 17px; }
   .complete { display: none; }

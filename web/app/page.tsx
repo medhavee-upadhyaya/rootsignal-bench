@@ -68,6 +68,7 @@ type Comparison = {
   reference: { run: { run_id: string; model: string; mode: ExecutionMode; latency_ms: number; root_cause: string }; scorecard: Scorecard };
   candidate: { run: { run_id: string; model: string; mode: ExecutionMode; latency_ms: number; root_cause: string }; scorecard: Scorecard };
   deltas: Scorecard & { latency_ms: number; latency_percent: number | null };
+  experiment: { inputs_match: boolean; query_match: boolean; knowledge_scope_match: boolean; input_changes: string[]; reference_knowledge_collections: string[]; candidate_knowledge_collections: string[] };
 };
 
 type Benchmark = {
@@ -825,6 +826,11 @@ export default function Home() {
               <div className="diagnosis-compare">
                 <div><span>REFERENCE · {comparison.reference.run.model}</span><p>{comparison.reference.run.root_cause}</p></div>
                 <div><span>CANDIDATE · {comparison.candidate.run.model}</span><p>{comparison.candidate.run.root_cause}</p></div>
+              </div>
+              <div className={`experiment-alignment ${comparison.experiment.inputs_match ? "matched" : "changed"}`}>
+                <div><span>EXPERIMENT INPUTS</span><strong>{comparison.experiment.inputs_match ? "Matched" : "Changed"}</strong></div>
+                <p>{comparison.experiment.inputs_match ? "Query and knowledge scope are identical, so quality deltas isolate execution behavior." : `Interpret the verdict with caution: ${comparison.experiment.input_changes.join(" and ")} changed between runs.`}</p>
+                <div className="scope-diff"><code>REF · {comparison.experiment.reference_knowledge_collections.join(", ") || "unrecorded"}</code><code>CAND · {comparison.experiment.candidate_knowledge_collections.join(", ") || "unrecorded"}</code></div>
               </div>
             </div>
           )}

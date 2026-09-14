@@ -49,6 +49,18 @@ def compare_runs(
     latency_percent = (
         round((latency_delta / reference_latency) * 100, 2) if reference_latency > 0 else None
     )
+    reference_scope = sorted(str(item) for item in reference["metadata"].get("knowledge_collections", []))
+    candidate_scope = sorted(str(item) for item in candidate["metadata"].get("knowledge_collections", []))
+    query_match = str(reference.get("query", "")) == str(candidate.get("query", ""))
+    knowledge_scope_match = reference_scope == candidate_scope
+    input_changes = [
+        label
+        for changed, label in (
+            (not query_match, "investigation query"),
+            (not knowledge_scope_match, "knowledge scope"),
+        )
+        if changed
+    ]
 
     material_quality_loss = any(
         deltas[metric] < -0.1
@@ -92,6 +104,14 @@ def compare_runs(
         "verdict": verdict,
         "reasons": reasons,
         "thresholds": {"overall": 0.02, "dimension": 0.1, "latency_percent": 20, "latency_ms": 100},
+        "experiment": {
+            "inputs_match": not input_changes,
+            "query_match": query_match,
+            "knowledge_scope_match": knowledge_scope_match,
+            "input_changes": input_changes,
+            "reference_knowledge_collections": reference_scope,
+            "candidate_knowledge_collections": candidate_scope,
+        },
         "reference": {"run": _run_identity(reference), "scorecard": reference_score},
         "candidate": {"run": _run_identity(candidate), "scorecard": candidate_score},
         "deltas": {**deltas, "latency_ms": latency_delta, "latency_percent": latency_percent},
