@@ -51,7 +51,7 @@ type RunSummary = {
 type StoredRun = RunSummary & {
   query: string;
   result: Investigation;
-  metadata: { api_version: string; oracle_backed: boolean; retrieval_engine: string; request_id: string };
+  metadata: { api_version: string; oracle_backed: boolean; retrieval_engine: string; request_id: string; knowledge_collections?: string[] };
 };
 type Scorecard = {
   root_cause: number;
@@ -282,6 +282,11 @@ export default function Home() {
     }, {});
   }, [result]);
 
+  const verifiedCollectionIds = useMemo(
+    () => selectedCollectionIds.filter((id) => collections.some((collection) => collection.id === id)),
+    [collections, selectedCollectionIds],
+  );
+
   const guidedComparisonComplete = Boolean(
     comparison && guidedControlRunId && guidedAgentRunId
     && comparison.reference.run.run_id === guidedControlRunId
@@ -289,7 +294,7 @@ export default function Home() {
   );
   const guidedWorkflow = getGuidedWorkflow({
     incidentId: selectedIncidentId,
-    collectionCount: selectedCollectionIds.length,
+    collectionCount: verifiedCollectionIds.length,
     controlRunId: guidedControlRunId,
     agentRunId: guidedAgentRunId,
     modelAvailable: Boolean(system?.llm.healthy),
@@ -298,7 +303,7 @@ export default function Home() {
   });
 
   async function investigate() {
-    if (!selectedIncidentId) return;
+    if (!selectedIncidentId || !verifiedCollectionIds.length) return;
     setRunning(true);
     setRunError("");
     try {
@@ -309,7 +314,7 @@ export default function Home() {
           incident_id: selectedIncidentId,
           query,
           mode,
-          collection_ids: selectedCollectionIds,
+          collection_ids: verifiedCollectionIds,
         }),
       });
       const payload = await response.json();
@@ -650,13 +655,14 @@ export default function Home() {
             rows={2}
             readOnly
           />
-          <button onClick={investigate} disabled={running || !selectedIncidentId || (mode === "model" && !system?.llm.healthy)}>
+          <button onClick={investigate} disabled={running || !selectedIncidentId || !verifiedCollectionIds.length || (mode === "model" && !system?.llm.healthy)}>
             {running ? <><span className="spinner" /> Investigating</> : <>Run {mode === "baseline" ? "control" : "agent"} <span>→</span></>}
           </button>
         </div>
         <div className="command-meta">
           <span><i className="dot green" /> {selectedIncident?.id ?? "catalog loading"}</span>
           <span><i className="dot amber" /> {selectedIncident?.metadata.difficulty ?? "—"}</span>
+          <span>{verifiedCollectionIds.length ? `${verifiedCollectionIds.length} verified knowledge scope${verifiedCollectionIds.length === 1 ? "" : "s"}` : "Knowledge scope unavailable"}</span>
           <span>{mode === "baseline" ? "Oracle-backed synthesis" : "Oracle hidden from agent"}</span>
           <span className={mode === "model" ? "model-mode" : "live"}>{mode === "baseline" ? "CONTROL RUN" : "MODEL RUN"}</span>
         </div>
@@ -728,7 +734,7 @@ export default function Home() {
         <section className="run-manifest" aria-label="Reproducibility manifest">
           <div><span>RUN ID</span><code>{activeRun.run_id}</code></div>
           <div><span>INCIDENT SHA-256</span><code title={activeRun.fixture_sha256}>{activeRun.fixture_sha256.slice(0, 16)}…</code></div>
-          <div><span>API / RETRIEVAL</span><code>{activeRun.metadata.api_version} · {activeRun.metadata.retrieval_engine}</code></div>
+          <div><span>API / RETRIEVAL</span><code>{activeRun.metadata.api_version} · {activeRun.metadata.retrieval_engine} · {activeRun.metadata.knowledge_collections?.length ?? 0} scopes</code></div>
           <div><span>REQUEST ID</span><code>{activeRun.metadata.request_id}</code></div>
           <a className="evidence-export" href={`/api/export?run_id=${encodeURIComponent(activeRun.run_id)}`}><span>PORTABLE EVIDENCE</span><strong>Export JSON ↓</strong></a>
         </section>

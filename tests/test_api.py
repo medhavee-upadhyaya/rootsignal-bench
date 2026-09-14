@@ -43,6 +43,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(record["incident_id"], "billing-clock-001")
         self.assertEqual(record["mode"], "baseline")
         self.assertTrue(record["metadata"]["oracle_backed"])
+        self.assertEqual(record["metadata"]["knowledge_collections"], ["incident-runbooks"])
         self.assertEqual(record["result"]["root_cause"], result["root_cause"])
 
         status, _, history = asgi_request("GET", "/v1/runs")
@@ -158,6 +159,17 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 200)
         collection = next(item for item in catalog["collections"] if item["id"] == collection_id)
         self.assertEqual(collection["documents"], 1)
+
+    def test_both_execution_modes_reject_unknown_knowledge_scope(self) -> None:
+        request = {
+            "incident_id": "checkout-latency-001",
+            "collection_ids": ["collection-that-does-not-exist"],
+        }
+        for path in ("/v1/baselines/deterministic", "/v1/investigations"):
+            status, _, payload = asgi_request("POST", path, body=request)
+            self.assertEqual(status, 422)
+            self.assertEqual(payload["error"]["code"], "validation_error")
+            self.assertIn("Unknown knowledge collections", payload["error"]["message"])
 
     def test_system_describes_honest_execution_modes(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/system")

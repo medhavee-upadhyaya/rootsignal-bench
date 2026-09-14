@@ -112,6 +112,11 @@ class FullStackInvestigationTests(unittest.TestCase):
 
         control_id = control["record"]["run_id"]
         agent_id = agent["record"]["run_id"]
+        _, _, stored_agent = asgi_request("GET", f"/v1/runs/{agent_id}")
+        self.assertEqual(
+            stored_agent["metadata"]["knowledge_collections"],
+            ["incident-runbooks", collection_id],
+        )
         status, _, comparison = asgi_request(
             "POST",
             "/v1/comparisons",

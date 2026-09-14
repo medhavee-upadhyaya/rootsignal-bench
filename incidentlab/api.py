@@ -201,6 +201,16 @@ def _incidents() -> list[Incident]:
     )
 
 
+def _validated_collections(collection_ids: list[str]) -> list[str]:
+    known = {str(item["id"]) for item in KNOWLEDGE.list_collections()}
+    if unknown := sorted(set(collection_ids) - known):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown knowledge collections: {unknown}",
+        )
+    return collection_ids
+
+
 def _record_result(
     *,
     incident: Incident,
@@ -209,6 +219,7 @@ def _record_result(
     result: dict[str, object],
     latency_ms: float,
     request_id_value: str,
+    collection_ids: list[str],
 ) -> dict[str, object]:
     path = _incident_path(incident.incident_id)
     fixture_sha256 = (
@@ -228,6 +239,7 @@ def _record_result(
         "prompt_tokens": int(run_metadata.get("prompt_tokens", 0)),
         "completion_tokens": int(run_metadata.get("completion_tokens", 0)),
         "retrieved_chunks": int(run_metadata.get("retrieved_chunks", 0)),
+        "knowledge_collections": collection_ids,
     }
     reference = RUNS.save(
         incident_id=incident.incident_id,
@@ -434,13 +446,7 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
     incident = _incident(payload.incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Unknown incident")
-    collections = payload.collection_ids
-    known = {str(item["id"]) for item in KNOWLEDGE.list_collections()}
-    if unknown := sorted(set(collections) - known):
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unknown knowledge collections: {unknown}",
-        )
+    collections = _validated_collections(payload.collection_ids)
     query = payload.query or incident.summary
     started = time.perf_counter()
     with METRICS.investigation():
@@ -469,6 +475,7 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
                 result=result,
                 latency_ms=(time.perf_counter() - started) * 1000,
                 request_id_value=getattr(request.state, "request_id", "unknown"),
+                collection_ids=collections,
             )
         except Exception as exc:
             LOGGER.warning(
@@ -484,6 +491,7 @@ def deterministic_baseline(payload: InvestigationRequest, request: Request) -> d
     incident = _incident(payload.incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Unknown incident")
+    _validated_collections(payload.collection_ids)
     started = time.perf_counter()
     result = Investigator().investigate(incident).as_dict()
     return _record_result(
@@ -493,4 +501,5 @@ def deterministic_baseline(payload: InvestigationRequest, request: Request) -> d
         result=result,
         latency_ms=(time.perf_counter() - started) * 1000,
         request_id_value=getattr(request.state, "request_id", "unknown"),
+        collection_ids=payload.collection_ids,
     )

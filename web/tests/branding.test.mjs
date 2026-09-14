@@ -104,6 +104,8 @@ test("scopes persistent knowledge collections to investigations", async () => {
 
   assert.match(page, /ACTIVE FOR INVESTIGATIONS/);
   assert.match(page, /selectedCollectionIds/);
+  assert.match(page, /verifiedCollectionIds/);
+  assert.match(page, /Knowledge scope unavailable/);
   assert.match(page, /INDEX INTO COLLECTION/);
   assert.match(collectionsRoute, /\/v1\/knowledge\/collections/);
   assert.match(investigationRoute, /collection_ids/);
