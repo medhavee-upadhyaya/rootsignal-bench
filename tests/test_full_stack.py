@@ -5,6 +5,7 @@ import json
 import unittest
 import urllib.error
 import uuid
+from pathlib import Path
 from unittest.mock import patch
 
 try:
@@ -68,6 +69,37 @@ class OpenAIProvider:
 
 @unittest.skipIf(METRICS is None, "API dependencies are not installed")
 class FullStackInvestigationTests(unittest.TestCase):
+    def test_observation_only_live_incident_runs_end_to_end_without_scoring(self) -> None:
+        fixture = json.loads(
+            Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")
+        )
+        fixture["id"] = f"live-{uuid.uuid4().hex}"
+        fixture["title"] = "Live checkout incident"
+        fixture["metadata"]["synthetic"] = False
+        fixture.pop("oracle")
+        status, _, created = asgi_request("POST", "/v1/incidents", body=fixture)
+        self.assertEqual(status, 201)
+        self.assertFalse(created["incident"]["metadata"]["evaluable"])
+
+        provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):
+            status, _, result = asgi_request(
+                "POST", "/v1/investigations", body={"incident_id": fixture["id"]}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(result["record"]["mode"], "model")
+
+        run_id = result["record"]["run_id"]
+        status, _, stored = asgi_request("GET", f"/v1/runs/{run_id}")
+        self.assertEqual(status, 200)
+        self.assertFalse(stored["evaluable"])
+        self.assertFalse(stored["metadata"]["evaluable"])
+
+        status, _, bundle = asgi_request("GET", f"/v1/runs/{run_id}/export")
+        self.assertEqual(status, 200)
+        self.assertIsNone(bundle["scorecard"])
+        self.assertTrue(verify_evidence_bundle(bundle))
+
     def test_saved_model_runs_produce_a_multi_incident_suite(self) -> None:
         run_ids = []
         for incident_id in ("checkout-latency-001", "billing-clock-001"):

@@ -26,7 +26,7 @@ The working application uses a persistent SQLite FTS5 knowledge base, read-only 
 | Workflow | Concrete output |
 |---|---|
 | Replay a production incident | Evidence-grounded diagnosis with citations and remediation |
-| Bring your own incident | Validated guided or JSON import with a server-side private oracle |
+| Investigate your own incident | Observation-only live investigations, or scoreable imports with a private oracle |
 | Scope operational context | Persistent knowledge collections selected per investigation |
 | Compare agent or model changes | Paired scorecards, confidence intervals, slice reports, and regression gates |
 | Share auditable evidence | Downloadable run and comparison bundles with offline SHA-256 verification |
@@ -75,7 +75,9 @@ npm run dev
 
 Open `http://localhost:3000` for the complete investigation workspace. The web server proxies investigation requests to the API at `http://127.0.0.1:8000`; set `INCIDENTLAB_API_URL` to use another backend.
 
-From the workspace, a user can create or import a synthetic incident, choose a control or independent model run, create scoped knowledge collections, ingest operational documents, inspect saved experiments, compare matching runs, and export a tamper-evident evidence bundle. Private grading oracles are stored server-side and never returned by catalog APIs.
+From the workspace, a user can create an ungraded live incident using only observed metrics, logs, deployments, and runbooks. Evaluation authors can instead attach a private oracle for scoring and regression comparison. Live investigations are kept out of benchmark suites; private grading oracles are stored server-side and never returned by catalog APIs.
+
+Choose **Live investigation** for active troubleshooting: no known root cause is required, only the connected model can run it, and exports contain evidence without a scorecard. Choose **Evaluation scenario** when you have a reviewed answer key and want control runs, scorecards, comparisons, and suite metrics.
 
 Run an independent model investigation through the API:
 

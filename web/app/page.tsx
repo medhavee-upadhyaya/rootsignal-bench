@@ -22,7 +22,7 @@ type IncidentSummary = {
   id: string;
   title: string;
   summary: string;
-  metadata: { failure_class?: string; difficulty?: string; synthetic?: boolean; catalog_source?: "built-in" | "custom" };
+  metadata: { failure_class?: string; difficulty?: string; synthetic?: boolean; evaluable?: boolean; catalog_source?: "built-in" | "custom" };
   observation_counts: { metrics: number; logs: number; deployments: number; runbooks: number };
 };
 
@@ -48,6 +48,7 @@ type RunSummary = {
   tool_calls: number;
   evidence_items: number;
   latency_ms: number;
+  evaluable: boolean;
 };
 type StoredRun = RunSummary & {
   query: string;
@@ -99,26 +100,27 @@ function lines(value: string) {
   return value.split("\n").map((item) => item.trim()).filter(Boolean);
 }
 
-function buildFixture(draft: Record<string, string>) {
+function buildFixture(draft: Record<string, string>, includeOracle = true) {
   const metrics = Object.fromEntries(lines(draft.metrics).map((line) => {
     const separator = line.indexOf("=");
     return separator > 0 ? [line.slice(0, separator).trim(), line.slice(separator + 1).trim()] : [line, "observed"];
   }));
-  return {
+  const fixture: Record<string, unknown> = {
     schema_version: "1.0",
     id: draft.id,
     title: draft.title,
     summary: draft.summary,
-    metadata: { failure_class: draft.failureClass, difficulty: draft.difficulty, license: "Proprietary", synthetic: true },
+    metadata: { failure_class: draft.failureClass, difficulty: draft.difficulty, license: "Proprietary", synthetic: includeOracle },
     telemetry: { metrics, logs: lines(draft.logs), deployments: lines(draft.deployments) },
     runbooks: [{ id: `${draft.id}-operations`, title: `${draft.title} operations`, content: draft.runbook }],
-    oracle: {
+  };
+  if (includeOracle) fixture.oracle = {
       root_cause: draft.rootCause,
       required_evidence: lines(draft.evidence),
       remediation: lines(draft.remediation),
       expected_tools: ["query_metrics", "query_logs", "query_deployments", "search_runbooks"],
-    },
   };
+  return fixture;
 }
 
 export default function Home() {
@@ -163,6 +165,7 @@ export default function Home() {
   const [guidedExported, setGuidedExported] = useState(false);
   const [showCreator, setShowCreator] = useState(false);
   const [creatorMode, setCreatorMode] = useState<"guided" | "json">("guided");
+  const [creatorPurpose, setCreatorPurpose] = useState<"live" | "evaluation">("live");
   const [creatorStatus, setCreatorStatus] = useState("");
   const [jsonFixture, setJsonFixture] = useState("");
   const [incidentDraft, setIncidentDraft] = useState({
@@ -305,7 +308,7 @@ export default function Home() {
   }
 
   const latestModelRuns = Array.from(
-    history.filter((run) => run.mode === "model").reduce((runs, run) => {
+    history.filter((run) => run.mode === "model" && run.evaluable).reduce((runs, run) => {
       if (!runs.has(run.incident_id)) runs.set(run.incident_id, run);
       return runs;
     }, new Map<string, RunSummary>()).values(),
@@ -429,6 +432,7 @@ export default function Home() {
     const incident = catalog?.incidents.find((candidate) => candidate.id === incidentId);
     setSelectedIncidentId(incidentId);
     setQuery(incident?.summary ?? "");
+    if (incident?.metadata.evaluable === false) setMode("model");
     setResult(null);
     setCompletedMode(null);
     setActiveRunId(null);
@@ -543,7 +547,7 @@ export default function Home() {
   async function createCustomIncident() {
     setCreatorStatus("Validating…");
     try {
-      const fixture = creatorMode === "json" ? JSON.parse(jsonFixture) : buildFixture(incidentDraft);
+      const fixture = creatorMode === "json" ? JSON.parse(jsonFixture) : buildFixture(incidentDraft, creatorPurpose === "evaluation");
       const response = await fetch("/api/incidents", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -557,6 +561,7 @@ export default function Home() {
       setCatalog(updatedCatalog);
       setSelectedIncidentId(payload.incident.id);
       setQuery(payload.incident.summary);
+      setMode(payload.incident.metadata.evaluable ? "baseline" : "model");
       setResult(null);
       setActiveRun(null);
       setActiveRunId(null);
@@ -652,12 +657,13 @@ export default function Home() {
 
       <section className="creator-section" id="create">
         <div className="creator-intro">
-          <div><span>CUSTOM EVALUATION DATA</span><strong>Bring your own incident</strong><small>Create a private scenario from observations and a hidden expected outcome.</small></div>
-          <button onClick={() => setShowCreator(!showCreator)}>{showCreator ? "Close builder" : "Create scenario →"}</button>
+          <div><span>YOUR OPERATIONAL DATA</span><strong>Investigate a real incident</strong><small>Provide observations only, or add an answer key when building an evaluation.</small></div>
+          <button onClick={() => setShowCreator(!showCreator)}>{showCreator ? "Close builder" : "Create incident →"}</button>
         </div>
         {showCreator && <div className="creator-panel">
           <div className="creator-tabs"><button className={creatorMode === "guided" ? "active" : ""} onClick={() => setCreatorMode("guided")}>Guided builder</button><button className={creatorMode === "json" ? "active" : ""} onClick={() => setCreatorMode("json")}>JSON import</button></div>
           {creatorMode === "guided" ? <div className="creator-form">
+            <div className="creator-purpose wide"><button className={creatorPurpose === "live" ? "active" : ""} onClick={() => setCreatorPurpose("live")}><strong>Live investigation</strong><span>No answer key · ungraded</span></button><button className={creatorPurpose === "evaluation" ? "active" : ""} onClick={() => setCreatorPurpose("evaluation")}><strong>Evaluation scenario</strong><span>Hidden oracle · scoreable</span></button></div>
             <label>INCIDENT ID<input value={incidentDraft.id} onChange={(event) => setIncidentDraft({...incidentDraft, id: event.target.value})} placeholder="payments-timeout-custom" /></label>
             <label>TITLE<input value={incidentDraft.title} onChange={(event) => setIncidentDraft({...incidentDraft, title: event.target.value})} placeholder="Payment requests timing out" /></label>
             <label className="wide">PUBLIC SUMMARY<textarea rows={2} value={incidentDraft.summary} onChange={(event) => setIncidentDraft({...incidentDraft, summary: event.target.value})} placeholder="Describe observable symptoms without revealing the answer." /></label>
@@ -667,11 +673,11 @@ export default function Home() {
             <label>LOG EVENTS · ONE PER LINE<textarea rows={4} value={incidentDraft.logs} onChange={(event) => setIncidentDraft({...incidentDraft, logs: event.target.value})} /></label>
             <label>DEPLOYMENTS · ONE PER LINE<textarea rows={3} value={incidentDraft.deployments} onChange={(event) => setIncidentDraft({...incidentDraft, deployments: event.target.value})} /></label>
             <label>RUNBOOK<textarea rows={3} value={incidentDraft.runbook} onChange={(event) => setIncidentDraft({...incidentDraft, runbook: event.target.value})} /></label>
-            <label className="wide private-field">HIDDEN ROOT CAUSE<textarea rows={2} value={incidentDraft.rootCause} onChange={(event) => setIncidentDraft({...incidentDraft, rootCause: event.target.value})} placeholder="Expected diagnosis used only for scoring" /></label>
+            {creatorPurpose === "evaluation" && <><label className="wide private-field">HIDDEN ROOT CAUSE<textarea rows={2} value={incidentDraft.rootCause} onChange={(event) => setIncidentDraft({...incidentDraft, rootCause: event.target.value})} placeholder="Expected diagnosis used only for scoring" /></label>
             <label>REQUIRED EVIDENCE · ONE PER LINE<textarea rows={3} value={incidentDraft.evidence} onChange={(event) => setIncidentDraft({...incidentDraft, evidence: event.target.value})} /></label>
-            <label>REMEDIATION · ONE PER LINE<textarea rows={3} value={incidentDraft.remediation} onChange={(event) => setIncidentDraft({...incidentDraft, remediation: event.target.value})} /></label>
+            <label>REMEDIATION · ONE PER LINE<textarea rows={3} value={incidentDraft.remediation} onChange={(event) => setIncidentDraft({...incidentDraft, remediation: event.target.value})} /></label></>}
           </div> : <label className="json-import">FIXTURE JSON<textarea rows={18} value={jsonFixture} onChange={(event) => setJsonFixture(event.target.value)} placeholder='{"schema_version":"1.0","id":"..."}' /></label>}
-          <div className="creator-actions"><span>{creatorStatus || "The oracle is stored server-side and never returned by catalog APIs."}</span><button onClick={createCustomIncident}>{creatorMode === "json" ? "Validate and import" : "Create scenario"} →</button></div>
+          <div className="creator-actions"><span>{creatorStatus || (creatorPurpose === "live" ? "Live incidents are investigated without an answer key and excluded from benchmark scores." : "The oracle is stored server-side and never returned by catalog APIs.")}</span><button onClick={createCustomIncident}>{creatorMode === "json" ? "Validate and import" : creatorPurpose === "live" ? "Create live incident" : "Create evaluation"} →</button></div>
         </div>}
       </section>
 
@@ -679,7 +685,7 @@ export default function Home() {
         <div className="command-label"><span>⌘</span> REPLAY AN INCIDENT</div>
         <div className="scenario-row">
           <label>
-            BENCHMARK SCENARIO
+            INCIDENT
             <select
               aria-label="Benchmark incident"
               value={selectedIncidentId}
@@ -697,6 +703,7 @@ export default function Home() {
               <span>{selectedIncident.metadata.failure_class?.replaceAll("-", " ")}</span>
               <span>{selectedIncident.metadata.difficulty}</span>
               <span>{selectedIncident.metadata.catalog_source}</span>
+              <span>{selectedIncident.metadata.evaluable === false ? "live · ungraded" : "evaluation · scoreable"}</span>
               <span>{Object.values(selectedIncident.observation_counts).reduce((sum, count) => sum + count, 0)} observations</span>
             </div>
           )}
@@ -705,6 +712,7 @@ export default function Home() {
           <button
             className={mode === "baseline" ? "active" : ""}
             onClick={() => selectMode("baseline")}
+            disabled={selectedIncident?.metadata.evaluable === false}
             role="radio"
             aria-checked={mode === "baseline"}
           >

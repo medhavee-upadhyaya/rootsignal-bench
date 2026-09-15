@@ -33,7 +33,7 @@ class Incident:
     summary: str
     telemetry: dict[str, Any]
     runbooks: list[dict[str, str]]
-    oracle: dict[str, Any]
+    oracle: dict[str, Any] | None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

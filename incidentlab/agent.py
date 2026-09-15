@@ -31,6 +31,8 @@ class Investigator:
         # The baseline's synthesis is fixture-backed to make infrastructure tests deterministic.
         # Model policies must synthesize from evidence and are graded against the hidden oracle.
         oracle = incident.oracle
+        if oracle is None:
+            raise ValueError("Deterministic baseline requires an evaluation oracle")
         return InvestigationResult(
             incident_id=incident.incident_id,
             root_cause=oracle["root_cause"],

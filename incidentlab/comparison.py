@@ -32,6 +32,8 @@ def _result(payload: dict[str, Any]) -> InvestigationResult:
 def compare_runs(
     incident: Incident, reference: dict[str, Any], candidate: dict[str, Any]
 ) -> dict[str, Any]:
+    if incident.oracle is None:
+        raise ValueError("Live incidents without an oracle cannot be compared")
     if reference["incident_id"] != candidate["incident_id"]:
         raise ValueError("Runs must use the same incident")
     if reference["fixture_sha256"] != candidate["fixture_sha256"]:

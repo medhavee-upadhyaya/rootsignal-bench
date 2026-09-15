@@ -38,23 +38,25 @@ def load_incident(path: str | Path) -> Incident:
     return incident_from_dict(data)
 
 
-def incident_from_dict(data: dict[str, Any]) -> Incident:
-    validate_fixture(data)
+def incident_from_dict(data: dict[str, Any], *, require_oracle: bool = True) -> Incident:
+    validate_fixture(data, require_oracle=require_oracle)
     return Incident(
         incident_id=data["id"],
         title=data["title"],
         summary=data["summary"],
         telemetry=data["telemetry"],
         runbooks=data.get("runbooks", []),
-        oracle=data["oracle"],
+        oracle=data.get("oracle"),
         metadata=data["metadata"],
     )
 
 
-def validate_fixture(data: dict[str, Any]) -> None:
+def validate_fixture(data: dict[str, Any], *, require_oracle: bool = True) -> None:
     if not isinstance(data, dict):
         raise ValueError("Fixture must be an object")
-    required = {"schema_version", "id", "title", "summary", "telemetry", "runbooks", "oracle", "metadata"}
+    required = {"schema_version", "id", "title", "summary", "telemetry", "runbooks", "metadata"}
+    if require_oracle:
+        required.add("oracle")
     missing = required - data.keys()
     if missing:
         raise ValueError(f"Fixture is missing required fields: {sorted(missing)}")
@@ -83,21 +85,25 @@ def validate_fixture(data: dict[str, Any]) -> None:
     for runbook in runbooks:
         if not all(isinstance(runbook.get(key), str) and runbook[key].strip() for key in ("id", "title", "content")):
             raise ValueError("Every runbook requires a non-empty id, title, and content")
-    oracle_required = {"root_cause", "required_evidence", "remediation", "expected_tools"}
-    missing_oracle = oracle_required - data["oracle"].keys()
-    if missing_oracle:
-        raise ValueError(f"Oracle is missing required fields: {sorted(missing_oracle)}")
-    if not isinstance(data["oracle"]["root_cause"], str) or not data["oracle"]["root_cause"].strip():
-        raise ValueError("Oracle root_cause must be a non-empty string")
-    for field_name in ("required_evidence", "remediation", "expected_tools"):
-        value = data["oracle"][field_name]
-        if not isinstance(value, list) or not value or not all(isinstance(item, str) and item.strip() for item in value):
-            raise ValueError(f"Oracle {field_name} must be a non-empty string list")
+    oracle = data.get("oracle")
+    if oracle is not None:
+        if not isinstance(oracle, dict):
+            raise ValueError("Fixture oracle must be an object")
+        oracle_required = {"root_cause", "required_evidence", "remediation", "expected_tools"}
+        missing_oracle = oracle_required - oracle.keys()
+        if missing_oracle:
+            raise ValueError(f"Oracle is missing required fields: {sorted(missing_oracle)}")
+        if not isinstance(oracle["root_cause"], str) or not oracle["root_cause"].strip():
+            raise ValueError("Oracle root_cause must be a non-empty string")
+        for field_name in ("required_evidence", "remediation", "expected_tools"):
+            value = oracle[field_name]
+            if not isinstance(value, list) or not value or not all(isinstance(item, str) and item.strip() for item in value):
+                raise ValueError(f"Oracle {field_name} must be a non-empty string list")
     metadata = data["metadata"]
     metadata_required = {"failure_class", "difficulty", "license", "synthetic"}
     if not isinstance(metadata, dict) or metadata_required - metadata.keys():
         raise ValueError(f"Fixture metadata requires {sorted(metadata_required)}")
     if metadata["difficulty"] not in {"easy", "medium", "hard"}:
         raise ValueError("Fixture difficulty must be easy, medium, or hard")
-    if metadata["synthetic"] is not True:
+    if require_oracle and metadata["synthetic"] is not True:
         raise ValueError("Public fixtures must explicitly declare synthetic=true")

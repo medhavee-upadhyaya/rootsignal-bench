@@ -35,6 +35,8 @@ class Scorecard:
 
 def score(incident: Incident, result: InvestigationResult) -> Scorecard:
     oracle = incident.oracle
+    if oracle is None:
+        raise ValueError("Live incidents without an oracle cannot be scored")
     root_terms = _terms(oracle["root_cause"])
     predicted_terms = _terms(result.root_cause)
     root_score = len(root_terms & predicted_terms) / max(len(root_terms), 1)

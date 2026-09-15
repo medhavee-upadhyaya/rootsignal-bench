@@ -93,13 +93,22 @@ test("supports guided and validated JSON incident imports", async () => {
     readFile(new URL("../app/api/incidents/route.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /Bring your own incident/);
+  assert.match(page, /Investigate a real incident/);
   assert.match(page, /Guided builder/);
   assert.match(page, /JSON import/);
   assert.match(page, /HIDDEN ROOT CAUSE/);
   assert.match(page, /buildFixture/);
   assert.match(catalogRoute, /export async function POST/);
   assert.match(catalogRoute, /\/v1\/incidents/);
+});
+
+test("separates real incident response from oracle-backed evaluation", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /Live investigation/);
+  assert.match(page, /No answer key · ungraded/);
+  assert.match(page, /creatorPurpose === "evaluation"/);
+  assert.match(page, /selectedIncident\?\.metadata\.evaluable === false/);
+  assert.match(page, /run\.mode === "model" && run\.evaluable/);
 });
 
 test("scopes persistent knowledge collections to investigations", async () => {

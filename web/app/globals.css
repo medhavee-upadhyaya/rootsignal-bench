@@ -70,6 +70,10 @@ nav .nav-active::after { content: ""; height: 2px; background: var(--green); lef
 .creator-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px 18px; padding: 20px; }
 .creator-form label, .json-import { color: var(--muted); font: 700 8px monospace; letter-spacing: .1em; }
 .creator-form label.wide { grid-column: 1 / -1; }
+.creator-purpose { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.creator-purpose button { display: grid; gap: 3px; text-align: left; padding: 12px; border: 1px solid var(--line); background: white; color: var(--ink); cursor: pointer; }
+.creator-purpose button.active { border-color: var(--green); box-shadow: inset 3px 0 var(--green); }
+.creator-purpose button span { color: var(--muted); font: 9px monospace; }
 .creator-form input, .creator-form select, .creator-form textarea, .json-import textarea { display: block; width: 100%; margin-top: 7px; border: 1px solid var(--line); background: white; color: var(--ink); padding: 10px; outline: none; resize: vertical; font: 10px/1.45 monospace; }
 .creator-form input:focus, .creator-form select:focus, .creator-form textarea:focus, .json-import textarea:focus { border-color: var(--green); }
 .creator-form label.private { padding: 11px; border: 1px solid #dabfb7; background: #fff4f0; color: #9b4937; }

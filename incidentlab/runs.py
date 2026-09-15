@@ -154,4 +154,5 @@ class RunStore:
             "tool_calls": len(result.get("tool_calls", [])),
             "evidence_items": len(result.get("evidence", [])),
             "latency_ms": metadata.get("latency_ms", 0),
+            "evaluable": metadata.get("evaluable", True),
         }

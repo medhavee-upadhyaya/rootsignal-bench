@@ -121,6 +121,31 @@ class APITests(unittest.TestCase):
         self.assertEqual(result["incident_id"], fixture["id"])
         self.assertNotEqual(result["record"]["run_id"], "")
 
+    def test_live_incident_requires_no_oracle_and_cannot_use_control(self) -> None:
+        fixture = json.loads(
+            Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")
+        )
+        fixture["id"] = f"live-{uuid.uuid4().hex}"
+        fixture["title"] = "Active checkout degradation"
+        fixture["metadata"]["synthetic"] = False
+        del fixture["oracle"]
+
+        status, _, created = asgi_request("POST", "/v1/incidents", body=fixture)
+        self.assertEqual(status, 201)
+        self.assertFalse(created["incident"]["metadata"]["evaluable"])
+        self.assertNotIn("oracle", json.dumps(created).lower())
+
+        status, _, detail = asgi_request("GET", f"/v1/incidents/{fixture['id']}")
+        self.assertEqual(status, 200)
+        self.assertFalse(detail["metadata"]["evaluable"])
+        self.assertIn("telemetry", detail)
+
+        status, _, rejected = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": fixture["id"]}
+        )
+        self.assertEqual(status, 409)
+        self.assertIn("require a model investigation", rejected["error"]["message"])
+
     def test_incident_detail_exposes_observations_but_not_oracle(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/incidents/checkout-latency-001")
         self.assertEqual(status, 200)

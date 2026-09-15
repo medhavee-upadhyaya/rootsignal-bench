@@ -9,6 +9,21 @@ from incidentlab.custom_incidents import CustomIncidentStore
 
 
 class CustomIncidentStoreTests(unittest.TestCase):
+    def test_observation_only_incident_persists_without_an_oracle(self) -> None:
+        fixture = json.loads(
+            Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")
+        )
+        fixture["id"] = "live-checkout"
+        fixture["metadata"]["synthetic"] = False
+        fixture.pop("oracle")
+        with tempfile.TemporaryDirectory() as directory:
+            store = CustomIncidentStore(Path(directory) / "incidents.db")
+            store.save(fixture)
+            incident = store.get("live-checkout")
+            self.assertIsNotNone(incident)
+            assert incident is not None
+            self.assertIsNone(incident.oracle)
+
     def test_custom_incident_persists_without_public_oracle_projection(self) -> None:
         fixture = json.loads(Path("fixtures/incidents/checkout_latency.yaml").read_text())
         fixture["id"] = "custom-checkout"

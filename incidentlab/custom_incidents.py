@@ -27,8 +27,9 @@ def validate_custom_fixture(fixture: dict[str, Any]) -> None:
     if len(serialized.encode()) > MAX_FIXTURE_BYTES:
         raise ValueError("Fixture must not exceed 1 MB")
     reject_secrets(serialized)
-    validate_fixture(fixture)
-    expected_tools = set(fixture["oracle"]["expected_tools"])
+    require_oracle = "oracle" in fixture
+    validate_fixture(fixture, require_oracle=require_oracle)
+    expected_tools = set(fixture.get("oracle", {}).get("expected_tools", []))
     unsupported = sorted(expected_tools - SUPPORTED_TOOLS)
     if unsupported:
         raise ValueError(f"Unsupported expected tools: {unsupported}")
@@ -86,7 +87,7 @@ class CustomIncidentStore:
             row = connection.execute(
                 "SELECT fixture_json FROM custom_incidents WHERE incident_id = ?", (incident_id,)
             ).fetchone()
-        return incident_from_dict(json.loads(row["fixture_json"])) if row else None
+        return incident_from_dict(json.loads(row["fixture_json"]), require_oracle=False) if row else None
 
     def digest(self, incident_id: str) -> str | None:
         with self._connect() as connection:
@@ -100,4 +101,4 @@ class CustomIncidentStore:
             rows = connection.execute(
                 "SELECT fixture_json FROM custom_incidents ORDER BY created_at, incident_id"
             ).fetchall()
-        return [incident_from_dict(json.loads(row["fixture_json"])) for row in rows]
+        return [incident_from_dict(json.loads(row["fixture_json"]), require_oracle=False) for row in rows]

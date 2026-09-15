@@ -194,6 +194,7 @@ def _public_incident(incident: Incident, *, include_observations: bool = False) 
         "summary": incident.summary,
         "metadata": {
             **incident.metadata,
+            "evaluable": incident.oracle is not None,
             "catalog_source": "custom" if CUSTOM_INCIDENTS.digest(incident.incident_id) else "built-in",
         },
         "observation_counts": counts,
@@ -245,6 +246,7 @@ def _record_result(
         "api_version": app.version,
         "latency_ms": round(latency_ms, 3),
         "oracle_backed": mode == "baseline",
+        "evaluable": incident.oracle is not None,
         "request_id": request_id_value,
         "retrieval_engine": "sqlite-fts5",
         "prompt_tokens": int(run_metadata.get("prompt_tokens", 0)),
@@ -533,6 +535,8 @@ def deterministic_baseline(payload: InvestigationRequest, request: Request) -> d
     incident = _incident(payload.incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Unknown incident")
+    if incident.oracle is None:
+        raise HTTPException(status_code=409, detail="Live incidents require a model investigation")
     _validated_collections(payload.collection_ids)
     started = time.perf_counter()
     result = Investigator().investigate(incident).as_dict()

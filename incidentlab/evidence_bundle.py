@@ -37,10 +37,12 @@ def build_evidence_bundle(
         "schema_version": "1.0",
         "exported_at": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "run": run,
-        "scorecard": score(incident, _result(run["result"])).as_dict(),
+        "scorecard": score(incident, _result(run["result"])).as_dict() if incident.oracle else None,
         "comparison": None,
     }
     if comparison_run is not None:
+        if incident.oracle is None:
+            raise ValueError("Live incidents without an oracle cannot be compared")
         artifact["comparison"] = compare_runs(incident, run, comparison_run)
     digest = hashlib.sha256(_canonical(artifact)).hexdigest()
     return {
