@@ -11,6 +11,7 @@ from typing import Any
 
 from .fixtures import incident_from_dict, validate_fixture
 from .models import Incident
+from .secrets import reject_secrets
 
 MAX_FIXTURE_BYTES = 1_000_000
 SUPPORTED_TOOLS = {
@@ -25,6 +26,7 @@ def validate_custom_fixture(fixture: dict[str, Any]) -> None:
     serialized = json.dumps(fixture, sort_keys=True, separators=(",", ":"))
     if len(serialized.encode()) > MAX_FIXTURE_BYTES:
         raise ValueError("Fixture must not exceed 1 MB")
+    reject_secrets(serialized)
     validate_fixture(fixture)
     expected_tools = set(fixture["oracle"]["expected_tools"])
     unsupported = sorted(expected_tools - SUPPORTED_TOOLS)

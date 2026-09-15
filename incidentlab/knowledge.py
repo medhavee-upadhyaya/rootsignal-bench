@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+from .secrets import reject_secrets
+
 RetrievalStrategy = Literal["lexical", "semantic", "hybrid", "reranked"]
 
 
@@ -162,6 +164,7 @@ class KnowledgeBase:
         return [dict(row) for row in rows]
 
     def ingest(self, source: str, text: str, collection_id: str = "incident-runbooks") -> dict[str, int | str]:
+        reject_secrets(text)
         digest = hashlib.sha256(text.encode()).hexdigest()
         document_id = digest[:16]
         chunks = chunk_text(text)

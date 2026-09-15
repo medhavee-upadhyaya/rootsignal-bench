@@ -18,6 +18,8 @@ Production telemetry, credentials, tenant boundaries, tool permissions, model en
 
 Tools are allowlisted and typed, call counts are bounded, evidence preserves provenance, fixture IDs are path-safe, containers run non-root with a read-only filesystem, and benchmark oracles stay outside model context. Production adapters must additionally enforce tenant filters, redact secrets before inference, pin artifacts by digest, sign result manifests, and require authorization at every tool boundary.
 
+Knowledge documents and custom incident fixtures are screened for common private-key, cloud-key, access-token, bearer-token, and credential-assignment patterns before persistence. Detection is intentionally fail-closed for likely matches, but pattern screening is not a substitute for upstream redaction, a platform secret scanner, or tenant-aware authorization.
+
 ## Explicit non-goals
 
 The reference implementation does not execute shell commands, modify infrastructure, or claim suitability for unsupervised remediation.

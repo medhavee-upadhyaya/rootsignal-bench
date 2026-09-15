@@ -171,6 +171,35 @@ class APITests(unittest.TestCase):
             self.assertEqual(payload["error"]["code"], "validation_error")
             self.assertIn("Unknown knowledge collections", payload["error"]["message"])
 
+    def test_secret_bearing_knowledge_is_rejected_before_persistence(self) -> None:
+        credential = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+        status, _, payload = asgi_request(
+            "POST",
+            "/v1/knowledge",
+            body={
+                "collection_id": "incident-runbooks",
+                "source": "runbook/unsafe",
+                "text": f"This document accidentally contains {credential} and must be rejected.",
+            },
+        )
+        self.assertEqual(status, 422)
+        self.assertEqual(payload["error"]["code"], "validation_error")
+        self.assertNotIn(credential, json.dumps(payload))
+
+    def test_secret_bearing_custom_incident_is_rejected_before_persistence(self) -> None:
+        credential = "ghp_" + "abcdefghijklmnopqrstuvwxyz1234567890"
+        fixture = json.loads(
+            Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")
+        )
+        fixture["id"] = f"unsafe-{uuid.uuid4().hex}"
+        fixture["telemetry"]["logs"].append(f"Accidental credential {credential}")
+
+        status, _, payload = asgi_request("POST", "/v1/incidents", body=fixture)
+
+        self.assertEqual(status, 422)
+        self.assertEqual(payload["error"]["code"], "validation_error")
+        self.assertNotIn(credential, json.dumps(payload))
+
     def test_system_describes_honest_execution_modes(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/system")
         self.assertEqual(status, 200)

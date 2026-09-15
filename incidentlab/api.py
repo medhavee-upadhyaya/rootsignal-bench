@@ -27,6 +27,7 @@ from .models import Incident
 from .observability import METRICS, log_event, trace_span
 from .rag_agent import GroundedAgent
 from .runs import ExecutionMode, RunStore
+from .secrets import SensitiveContentError
 
 FIXTURE_ROOT = Path(os.getenv("INCIDENTLAB_FIXTURES", "fixtures/incidents")).resolve()
 DB_PATH = os.getenv("INCIDENTLAB_DB", "work/incidentlab.db")
@@ -428,6 +429,8 @@ def compare(payload: ComparisonRequest) -> dict[str, object]:
 def ingest_knowledge(request: KnowledgeRequest) -> dict[str, object]:
     try:
         return KNOWLEDGE.ingest(request.source, request.text, request.collection_id)
+    except SensitiveContentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
