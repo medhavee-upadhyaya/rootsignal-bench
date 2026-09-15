@@ -87,7 +87,7 @@ type Benchmark = {
     agent_steps: number;
   };
 };
-type SuiteReport = { fixture_count: number; models: string[]; aggregate: Omit<Scorecard, "incident_id">; confidence_intervals: { overall: { lower: number; upper: number } }; incidents: Array<Scorecard & { run_id: string; model: string }> };
+type SuiteReport = { fixture_count: number; models: string[]; aggregate: Omit<Scorecard, "incident_id">; confidence_intervals: { overall: { lower: number; upper: number } }; incidents: Array<Scorecard & { run_id: string; model: string }>; integrity: { algorithm: string; digest: string } };
 
 const sourceIcons: Record<string, string> = {
   metrics: "⌁",
@@ -329,6 +329,16 @@ export default function Home() {
     } finally {
       setSuiteLoading(false);
     }
+  }
+
+  function downloadSuiteReport() {
+    if (!suiteReport) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(suiteReport, null, 2)], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `rootsignal-suite-${suiteReport.integrity.digest.slice(0, 12)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   function chooseComparablePair(runs: RunSummary[]) {
@@ -863,7 +873,7 @@ export default function Home() {
           <div><span>SUITE EVALUATION</span><strong>Score saved model runs across incidents</strong><small>{latestModelRuns.length} distinct incident{latestModelRuns.length === 1 ? "" : "s"} available in loaded history</small></div>
           <button onClick={evaluateLoadedRuns} disabled={suiteLoading || latestModelRuns.length < 2}>{suiteLoading ? "Scoring…" : latestModelRuns.length < 2 ? "Need 2 model incidents" : "Evaluate suite →"}</button>
           {suiteError && <p role="alert">{suiteError}</p>}
-          {suiteReport && <div className="suite-result"><div><span>OVERALL</span><strong>{suiteReport.aggregate.overall.toFixed(3)}</strong><small>95% CI {suiteReport.confidence_intervals.overall.lower.toFixed(3)}–{suiteReport.confidence_intervals.overall.upper.toFixed(3)}</small></div><div><span>COVERAGE</span><strong>{suiteReport.fixture_count}</strong><small>distinct incidents</small></div><div><span>MODEL SET</span><strong>{suiteReport.models.length}</strong><small>{suiteReport.models.join(", ")}</small></div></div>}
+          {suiteReport && <div className="suite-result"><div><span>OVERALL</span><strong>{suiteReport.aggregate.overall.toFixed(3)}</strong><small>95% CI {suiteReport.confidence_intervals.overall.lower.toFixed(3)}–{suiteReport.confidence_intervals.overall.upper.toFixed(3)}</small></div><div><span>COVERAGE</span><strong>{suiteReport.fixture_count}</strong><small>distinct incidents</small></div><div><span>MODEL SET</span><strong>{suiteReport.models.length}</strong><small>{suiteReport.models.join(", ")}</small></div><button onClick={downloadSuiteReport}>Download verified JSON ↓</button></div>}
         </div>
         <div className="comparison-workspace">
           <div className="comparison-heading">

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import sys
+from pathlib import Path
 from typing import Any
 
 from evals.statistics import bootstrap_mean_ci
@@ -11,6 +15,10 @@ METRICS = (
     "root_cause", "tool_selection", "tool_precision", "evidence_coverage",
     "citation_validity", "remediation_coverage", "overall",
 )
+
+
+def _canonical(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
 
 def _result(payload: dict[str, Any]) -> InvestigationResult:
@@ -48,7 +56,7 @@ def build_suite(entries: list[tuple[Incident, dict[str, Any]]]) -> dict[str, Any
         ).as_dict()
         for metric in METRICS
     }
-    return {
+    artifact = {
         "schema_version": "1",
         "kind": "saved-model-run-suite",
         "fixture_count": len(rows),
@@ -58,3 +66,40 @@ def build_suite(entries: list[tuple[Incident, dict[str, Any]]]) -> dict[str, Any
         "confidence_intervals": intervals,
         "statistics": {"method": "nonparametric bootstrap over incidents", "seed": 17, "bootstrap_samples": 2_000},
     }
+    return {
+        **artifact,
+        "integrity": {
+            "algorithm": "sha256",
+            "canonicalization": "json-sort-keys-compact-utf8",
+            "digest": hashlib.sha256(_canonical(artifact)).hexdigest(),
+        },
+    }
+
+
+def verify_suite(report: dict[str, Any]) -> bool:
+    integrity = report.get("integrity")
+    if not isinstance(integrity, dict) or integrity.get("algorithm") != "sha256":
+        return False
+    artifact = {key: value for key, value in report.items() if key != "integrity"}
+    return hashlib.sha256(_canonical(artifact)).hexdigest() == integrity.get("digest")
+
+
+def main(argv: list[str] | None = None) -> int:
+    arguments = argv if argv is not None else sys.argv[1:]
+    if len(arguments) != 1:
+        print("usage: python -m incidentlab.suites <suite.json>", file=sys.stderr)
+        return 2
+    try:
+        report = json.loads(Path(arguments[0]).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"invalid suite report: {exc}", file=sys.stderr)
+        return 2
+    if not isinstance(report, dict) or not verify_suite(report):
+        print("integrity verification failed", file=sys.stderr)
+        return 1
+    print(f"verified sha256 {report['integrity']['digest']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

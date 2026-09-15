@@ -138,5 +138,7 @@ test("evaluates saved model runs as a multi-incident suite", async () => {
   assert.match(page, /SUITE EVALUATION/);
   assert.match(page, /latestModelRuns/);
   assert.match(page, /95% CI/);
+  assert.match(page, /Download verified JSON/);
+  assert.match(page, /suiteReport\.integrity\.digest/);
   assert.match(route, /\/v1\/evaluation-suites/);
 });

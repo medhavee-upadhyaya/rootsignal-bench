@@ -95,6 +95,12 @@ Verify a downloaded evidence bundle independently:
 python -m incidentlab.evidence_bundle rootsignal-RUN_ID.json
 ```
 
+Verify a downloaded multi-incident suite report with:
+
+```bash
+python -m incidentlab.suites rootsignal-suite-DIGEST.json
+```
+
 ## Example result
 
 ```text

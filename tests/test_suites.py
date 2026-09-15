@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import io
+import json
+import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 
 from incidentlab.agent import Investigator
 from incidentlab.fixtures import load_incident
-from incidentlab.suites import build_suite
+from incidentlab.suites import build_suite, main, verify_suite
 
 
 def stored_model_run(incident, run_id: str) -> dict:
@@ -27,6 +32,10 @@ class EvaluationSuiteTests(unittest.TestCase):
         self.assertEqual(report["fixture_count"], 2)
         self.assertEqual([row["incident_id"] for row in report["incidents"]], sorted([first.incident_id, second.incident_id]))
         self.assertEqual(report["confidence_intervals"]["overall"]["bootstrap_samples"], 2_000)
+        self.assertTrue(verify_suite(report))
+        tampered = json.loads(json.dumps(report))
+        tampered["aggregate"]["overall"] = 1.0
+        self.assertFalse(verify_suite(tampered))
 
     def test_rejects_oracle_controls_and_duplicate_incidents(self) -> None:
         incident = load_incident("fixtures/incidents/checkout_latency.yaml")
@@ -38,6 +47,28 @@ class EvaluationSuiteTests(unittest.TestCase):
         other = load_incident("fixtures/incidents/billing_clock.json")
         with self.assertRaisesRegex(ValueError, "model-backed runs only"):
             build_suite([(incident, first), (other, second)])
+
+    def test_offline_verifier_accepts_valid_file_and_rejects_tampering(self) -> None:
+        first = load_incident("fixtures/incidents/checkout_latency.yaml")
+        second = load_incident("fixtures/incidents/billing_clock.json")
+        report = build_suite([
+            (first, stored_model_run(first, "a" * 32)),
+            (second, stored_model_run(second, "b" * 32)),
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "suite.json"
+            path.write_text(json.dumps(report), encoding="utf-8")
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(main([str(path)]), 0)
+            self.assertIn(report["integrity"]["digest"], output.getvalue())
+
+            report["aggregate"]["overall"] = 1.0
+            path.write_text(json.dumps(report), encoding="utf-8")
+            error = io.StringIO()
+            with redirect_stderr(error):
+                self.assertEqual(main([str(path)]), 1)
+            self.assertIn("integrity verification failed", error.getvalue())
 
 
 if __name__ == "__main__":
