@@ -6,6 +6,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from typing import Annotated
 
 try:
     from fastapi import FastAPI, HTTPException, Request, Response
@@ -28,6 +29,7 @@ from .observability import METRICS, log_event, trace_span
 from .rag_agent import GroundedAgent
 from .runs import ExecutionMode, RunStore
 from .secrets import SensitiveContentError
+from .suites import build_suite
 
 FIXTURE_ROOT = Path(os.getenv("INCIDENTLAB_FIXTURES", "fixtures/incidents")).resolve()
 DB_PATH = os.getenv("INCIDENTLAB_DB", "work/incidentlab.db")
@@ -51,6 +53,7 @@ RATE_LIMITED_PATHS = {
     "/v1/baselines/deterministic",
     "/v1/comparisons",
     "/v1/incidents",
+    "/v1/evaluation-suites",
 }
 
 
@@ -158,6 +161,13 @@ class CollectionRequest(BaseModel):
 class ComparisonRequest(BaseModel):
     reference_run_id: str = Field(pattern=r"^[a-f0-9]{32}$")
     candidate_run_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+
+
+RunId = Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
+
+
+class EvaluationSuiteRequest(BaseModel):
+    run_ids: list[RunId] = Field(min_length=2, max_length=50)
 
 
 def _incident_path(incident_id: str) -> Path | None:
@@ -423,6 +433,25 @@ def compare(payload: ComparisonRequest) -> dict[str, object]:
         return compare_runs(incident, reference, candidate)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/v1/evaluation-suites")
+def evaluate_suite(payload: EvaluationSuiteRequest) -> dict[str, object]:
+    if len(set(payload.run_ids)) != len(payload.run_ids):
+        raise HTTPException(status_code=422, detail="Run ids must be unique")
+    entries = []
+    for run_id in payload.run_ids:
+        run = RUNS.get(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Unknown run")
+        incident = _incident(str(run["incident_id"]))
+        if incident is None:
+            raise HTTPException(status_code=404, detail="Incident fixture unavailable")
+        entries.append((incident, run))
+    try:
+        return build_suite(entries)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/v1/knowledge")

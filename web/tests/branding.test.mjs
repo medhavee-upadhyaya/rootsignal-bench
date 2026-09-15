@@ -129,3 +129,14 @@ test("exports portable run and comparison evidence", async () => {
   assert.match(exportRoute, /\/v1\/runs\/\$\{encodeURIComponent\(runId\)\}\/export/);
   assert.match(exportRoute, /content-disposition/);
 });
+
+test("evaluates saved model runs as a multi-incident suite", async () => {
+  const [page, route] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/evaluate/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /SUITE EVALUATION/);
+  assert.match(page, /latestModelRuns/);
+  assert.match(page, /95% CI/);
+  assert.match(route, /\/v1\/evaluation-suites/);
+});

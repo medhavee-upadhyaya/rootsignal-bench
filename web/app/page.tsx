@@ -87,6 +87,7 @@ type Benchmark = {
     agent_steps: number;
   };
 };
+type SuiteReport = { fixture_count: number; models: string[]; aggregate: Omit<Scorecard, "incident_id">; confidence_intervals: { overall: { lower: number; upper: number } }; incidents: Array<Scorecard & { run_id: string; model: string }> };
 
 const sourceIcons: Record<string, string> = {
   metrics: "⌁",
@@ -154,6 +155,9 @@ export default function Home() {
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState("");
   const [reviewLinkStatus, setReviewLinkStatus] = useState("");
+  const [suiteReport, setSuiteReport] = useState<SuiteReport | null>(null);
+  const [suiteLoading, setSuiteLoading] = useState(false);
+  const [suiteError, setSuiteError] = useState("");
   const [guidedControlRunId, setGuidedControlRunId] = useState<string | null>(null);
   const [guidedAgentRunId, setGuidedAgentRunId] = useState<string | null>(null);
   const [guidedExported, setGuidedExported] = useState(false);
@@ -297,6 +301,33 @@ export default function Home() {
       setRunError(error instanceof Error ? error.message : "Could not load more runs");
     } finally {
       setHistoryLoadingMore(false);
+    }
+  }
+
+  const latestModelRuns = Array.from(
+    history.filter((run) => run.mode === "model").reduce((runs, run) => {
+      if (!runs.has(run.incident_id)) runs.set(run.incident_id, run);
+      return runs;
+    }, new Map<string, RunSummary>()).values(),
+  );
+
+  async function evaluateLoadedRuns() {
+    if (latestModelRuns.length < 2) return;
+    setSuiteLoading(true);
+    setSuiteError("");
+    try {
+      const response = await fetch("/api/evaluate", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ run_ids: latestModelRuns.map((run) => run.run_id) }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || "Suite evaluation failed");
+      setSuiteReport(payload);
+    } catch (error) {
+      setSuiteReport(null);
+      setSuiteError(error instanceof Error ? error.message : "Suite evaluation failed");
+    } finally {
+      setSuiteLoading(false);
     }
   }
 
@@ -828,6 +859,12 @@ export default function Home() {
         ) : (
           <div className="runs-empty">{historyLoading ? "Loading saved experiments…" : "No saved runs yet. Complete a control or agent run to create the first experiment record."}</div>
         )}
+        <div className="suite-workspace">
+          <div><span>SUITE EVALUATION</span><strong>Score saved model runs across incidents</strong><small>{latestModelRuns.length} distinct incident{latestModelRuns.length === 1 ? "" : "s"} available in loaded history</small></div>
+          <button onClick={evaluateLoadedRuns} disabled={suiteLoading || latestModelRuns.length < 2}>{suiteLoading ? "Scoring…" : latestModelRuns.length < 2 ? "Need 2 model incidents" : "Evaluate suite →"}</button>
+          {suiteError && <p role="alert">{suiteError}</p>}
+          {suiteReport && <div className="suite-result"><div><span>OVERALL</span><strong>{suiteReport.aggregate.overall.toFixed(3)}</strong><small>95% CI {suiteReport.confidence_intervals.overall.lower.toFixed(3)}–{suiteReport.confidence_intervals.overall.upper.toFixed(3)}</small></div><div><span>COVERAGE</span><strong>{suiteReport.fixture_count}</strong><small>distinct incidents</small></div><div><span>MODEL SET</span><strong>{suiteReport.models.length}</strong><small>{suiteReport.models.join(", ")}</small></div></div>}
+        </div>
         <div className="comparison-workspace">
           <div className="comparison-heading">
             <div><span>REGRESSION ANALYSIS</span><h3>Compare experiments</h3></div>

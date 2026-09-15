@@ -68,6 +68,29 @@ class OpenAIProvider:
 
 @unittest.skipIf(METRICS is None, "API dependencies are not installed")
 class FullStackInvestigationTests(unittest.TestCase):
+    def test_saved_model_runs_produce_a_multi_incident_suite(self) -> None:
+        run_ids = []
+        for incident_id in ("checkout-latency-001", "billing-clock-001"):
+            provider = OpenAIProvider()
+            with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):
+                status, _, result = asgi_request(
+                    "POST", "/v1/investigations", body={"incident_id": incident_id}
+                )
+            self.assertEqual(status, 200)
+            run_ids.append(result["record"]["run_id"])
+
+        status, _, report = asgi_request(
+            "POST", "/v1/evaluation-suites", body={"run_ids": run_ids}
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(report["kind"], "saved-model-run-suite")
+        self.assertEqual(report["fixture_count"], 2)
+        self.assertEqual(len(report["incidents"]), 2)
+        self.assertIn("overall", report["aggregate"])
+        self.assertEqual(report["confidence_intervals"]["overall"]["confidence"], 0.95)
+        self.assertNotIn('"oracle"', json.dumps(report).lower())
+
     def test_new_user_journey_creates_verifiable_comparison_evidence(self) -> None:
         collection_id = f"journey-{uuid.uuid4().hex}"
         status, _, collection = asgi_request(
