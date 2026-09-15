@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getGuidedWorkflow, type GuidedStepId } from "@/lib/guided-workflow";
 import { findControlAgentPair } from "@/lib/run-pairing";
+import { buildReviewLink, parseReviewLink } from "@/lib/review-links";
 
 type Evidence = { source: string; content: string; relevance: number };
 type ToolCall = { name: string; arguments: Record<string, string> };
@@ -152,6 +153,7 @@ export default function Home() {
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState("");
+  const [reviewLinkStatus, setReviewLinkStatus] = useState("");
   const [guidedControlRunId, setGuidedControlRunId] = useState<string | null>(null);
   const [guidedAgentRunId, setGuidedAgentRunId] = useState<string | null>(null);
   const [guidedExported, setGuidedExported] = useState(false);
@@ -187,6 +189,19 @@ export default function Home() {
     refreshSystem();
     refreshRuns();
     refreshCollections();
+    const review = parseReviewLink(window.location.search);
+    let restoreTimer: number | undefined;
+    if (review) {
+      restoreTimer = window.setTimeout(() => {
+        setReferenceRunId(review.referenceRunId);
+        setCandidateRunId(review.candidateRunId);
+        void loadRun(review.candidateRunId, false);
+        void compareSelectedRuns(review.referenceRunId, review.candidateRunId);
+      }, 0);
+    }
+    return () => {
+      if (restoreTimer) window.clearTimeout(restoreTimer);
+    };
     // Initial data bootstrap; subsequent refreshes are explicit user or run-completion actions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -441,6 +456,22 @@ export default function Home() {
       setComparisonError(error instanceof Error ? error.message : "Comparison failed");
     } finally {
       setComparisonLoading(false);
+    }
+  }
+
+  async function copyReviewLink() {
+    if (!comparison) return;
+    const link = buildReviewLink(
+      window.location.href,
+      comparison.reference.run.run_id,
+      comparison.candidate.run.run_id,
+    );
+    try {
+      await navigator.clipboard.writeText(link);
+      window.history.replaceState({}, "", link);
+      setReviewLinkStatus("Review link copied ✓");
+    } catch {
+      setReviewLinkStatus("Copy unavailable");
     }
   }
 
@@ -825,6 +856,7 @@ export default function Home() {
                 <strong>{comparison.verdict}</strong>
                 {comparison.reasons.map((reason) => <p key={reason}>{reason}</p>)}
                 <a className="comparison-export" href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`} onClick={() => guidedComparisonComplete && setGuidedExported(true)}>Export verified evidence ↓</a>
+                <button className="review-link" onClick={copyReviewLink}>{reviewLinkStatus || "Copy review link ↗"}</button>
               </div>
               <div className="comparison-table">
                 <div className="comparison-row header"><span>Metric</span><span>Reference</span><span>Candidate</span><span>Delta</span></div>

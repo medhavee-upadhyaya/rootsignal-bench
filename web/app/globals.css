@@ -203,6 +203,7 @@ textarea:read-only { color: #dbe2df; }
 .comparison-result.unchanged .verdict > strong { background: #e6e7e1; color: #5f6764; }
 .verdict p { margin: 5px 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .comparison-export { display: inline-block; margin-top: 12px; color: var(--green); font: 700 9px monospace; text-decoration: none; border-bottom: 1px solid var(--green); }
+.review-link { display: block; margin-top: 11px; padding: 0; border: 0; border-bottom: 1px solid var(--muted); background: transparent; color: var(--muted); font: 700 8px monospace; cursor: pointer; }
 .comparison-table { padding: 14px 20px; }
 .comparison-row { display: grid; grid-template-columns: 1.5fr repeat(3, .65fr); gap: 8px; padding: 7px 0; border-bottom: 1px solid #e5e5dd; font: 9px monospace; }
 .comparison-row:last-child { border: 0; }
