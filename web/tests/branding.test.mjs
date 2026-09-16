@@ -111,6 +111,15 @@ test("separates real incident response from oracle-backed evaluation", async () 
   assert.match(page, /run\.mode === "model" && run\.evaluable/);
 });
 
+test("lets users define a safe per-run investigation question", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /INVESTIGATION QUESTION/);
+  assert.match(page, /onChange=\{\(event\) => setQuery\(event\.target\.value\)\}/);
+  assert.match(page, /Reset to incident summary/);
+  assert.match(page, /credentials rejected before execution/);
+  assert.doesNotMatch(page, /aria-label="Incident description"[\s\S]{0,80}readOnly/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

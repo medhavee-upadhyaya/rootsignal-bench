@@ -129,6 +129,14 @@ nav .nav-active::after { content: ""; height: 2px; background: var(--green); lef
 .model-setup-footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 10px 13px; border-top: 1px solid #394743; color: #91a09c; font: 8px/1.4 monospace; }
 .model-setup-footer button { border: 0; background: var(--mint); color: var(--ink); padding: 8px 10px; font: 700 8px monospace; cursor: pointer; }
 .command-row { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: stretch; }
+.investigation-intent { border: 1px solid #41504d; background: #202d2b; }
+.investigation-intent:focus-within { border-color: var(--mint); }
+.investigation-intent > label { display: block; padding: 9px 16px 0; color: #91a09c; font: 700 8px monospace; letter-spacing: .12em; }
+.investigation-intent textarea { border: 0; padding: 8px 16px; }
+.investigation-intent > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 12px 9px 16px; color: #82918d; font: 8px monospace; }
+.command-row .investigation-intent button { min-width: 0; padding: 0; background: transparent; color: var(--mint); font: 700 8px monospace; }
+.command-row .investigation-intent button:hover { background: transparent; color: white; }
+.command-row .investigation-intent button:disabled { color: #66736f; cursor: default; }
 textarea { resize: none; width: 100%; border: 1px solid #41504d; border-radius: 0; background: #202d2b; color: white; padding: 16px; outline: none; font-size: 15px; line-height: 1.4; }
 textarea:focus { border-color: var(--mint); }
 textarea:read-only { color: #dbe2df; }

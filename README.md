@@ -79,6 +79,8 @@ From the workspace, a user can create an ungraded live incident using only obser
 
 Choose **Live investigation** for active troubleshooting: no known root cause is required, only the connected model can run it, and exports contain evidence without a scorecard. Choose **Evaluation scenario** when you have a reviewed answer key and want control runs, scorecards, comparisons, and suite metrics.
 
+Each run can use its own investigation question. RootSignal stores that question with the immutable run, exposes query drift in comparisons, and rejects credential-like content before model execution or persistence.
+
 Run an independent model investigation through the API:
 
 ```bash

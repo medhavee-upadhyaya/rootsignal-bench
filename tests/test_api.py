@@ -225,6 +225,33 @@ class APITests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "validation_error")
         self.assertNotIn(credential, json.dumps(payload))
 
+    def test_secret_bearing_investigation_question_is_rejected_before_execution(self) -> None:
+        credential = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+        for path in ("/v1/investigations", "/v1/baselines/deterministic"):
+            status, _, payload = asgi_request(
+                "POST",
+                path,
+                body={
+                    "incident_id": "checkout-latency-001",
+                    "query": f"Investigate using {credential}",
+                },
+            )
+            self.assertEqual(status, 422)
+            self.assertEqual(payload["error"]["code"], "validation_error")
+            self.assertNotIn(credential, json.dumps(payload))
+
+    def test_custom_investigation_question_is_trimmed_and_persisted(self) -> None:
+        question = "Compare deployment changes with connection-pool saturation"
+        status, _, result = asgi_request(
+            "POST",
+            "/v1/baselines/deterministic",
+            body={"incident_id": "checkout-latency-001", "query": f"  {question}  "},
+        )
+        self.assertEqual(status, 200)
+        status, _, stored = asgi_request("GET", f"/v1/runs/{result['record']['run_id']}")
+        self.assertEqual(status, 200)
+        self.assertEqual(stored["query"], question)
+
     def test_system_describes_honest_execution_modes(self) -> None:
         status, _, payload = asgi_request("GET", "/v1/system")
         self.assertEqual(status, 200)

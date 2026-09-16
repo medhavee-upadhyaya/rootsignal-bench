@@ -751,13 +751,12 @@ export default function Home() {
           </div>
         )}
         <div className="command-row">
-          <textarea
-            value={query}
-            aria-label="Incident description"
-            rows={2}
-            readOnly
-          />
-          <button onClick={investigate} disabled={running || !selectedIncidentId || !verifiedCollectionIds.length || (mode === "model" && !system?.llm.healthy)}>
+          <div className="investigation-intent">
+            <label htmlFor="investigation-query">INVESTIGATION QUESTION</label>
+            <textarea id="investigation-query" value={query} aria-label="Investigation question" rows={2} maxLength={2000} onChange={(event) => setQuery(event.target.value)} />
+            <div><span>{query.length}/2000 · saved with this run</span><button type="button" onClick={() => setQuery(selectedIncident?.summary ?? "")} disabled={!selectedIncident || query === selectedIncident.summary}>Reset to incident summary</button></div>
+          </div>
+          <button onClick={investigate} disabled={running || query.trim().length < 3 || !selectedIncidentId || !verifiedCollectionIds.length || (mode === "model" && !system?.llm.healthy)}>
             {running ? <><span className="spinner" /> Investigating</> : <>Run {mode === "baseline" ? "control" : "agent"} <span>→</span></>}
           </button>
         </div>
@@ -765,6 +764,7 @@ export default function Home() {
           <span><i className="dot green" /> {selectedIncident?.id ?? "catalog loading"}</span>
           <span><i className="dot amber" /> {selectedIncident?.metadata.difficulty ?? "—"}</span>
           <span>{verifiedCollectionIds.length ? `${verifiedCollectionIds.length} verified knowledge scope${verifiedCollectionIds.length === 1 ? "" : "s"}` : "Knowledge scope unavailable"}</span>
+          <span>credentials rejected before execution</span>
           <span>{mode === "baseline" ? "Oracle-backed synthesis" : "Oracle hidden from agent"}</span>
           <span className={mode === "model" ? "model-mode" : "live"}>{mode === "baseline" ? "CONTROL RUN" : "MODEL RUN"}</span>
         </div>

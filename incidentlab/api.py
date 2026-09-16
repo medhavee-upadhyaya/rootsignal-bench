@@ -28,7 +28,7 @@ from .models import Incident
 from .observability import METRICS, log_event, trace_span
 from .rag_agent import GroundedAgent
 from .runs import ExecutionMode, RunStore
-from .secrets import SensitiveContentError
+from .secrets import SensitiveContentError, reject_secrets
 from .suites import build_suite
 
 FIXTURE_ROOT = Path(os.getenv("INCIDENTLAB_FIXTURES", "fixtures/incidents")).resolve()
@@ -221,6 +221,17 @@ def _validated_collections(collection_ids: list[str]) -> list[str]:
             detail=f"Unknown knowledge collections: {unknown}",
         )
     return collection_ids
+
+
+def _validated_query(query: str | None, incident: Incident) -> str:
+    value = (query or incident.summary).strip()
+    if len(value) < 3:
+        raise HTTPException(status_code=422, detail="Investigation question is too short")
+    try:
+        reject_secrets(value)
+    except SensitiveContentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return value
 
 
 def _record_result(
@@ -491,7 +502,7 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
     if incident is None:
         raise HTTPException(status_code=404, detail="Unknown incident")
     collections = _validated_collections(payload.collection_ids)
-    query = payload.query or incident.summary
+    query = _validated_query(payload.query, incident)
     started = time.perf_counter()
     with METRICS.investigation():
         try:
@@ -538,12 +549,13 @@ def deterministic_baseline(payload: InvestigationRequest, request: Request) -> d
     if incident.oracle is None:
         raise HTTPException(status_code=409, detail="Live incidents require a model investigation")
     _validated_collections(payload.collection_ids)
+    query = _validated_query(payload.query, incident)
     started = time.perf_counter()
     result = Investigator().investigate(incident).as_dict()
     return _record_result(
         incident=incident,
         mode="baseline",
-        query=payload.query or incident.summary,
+        query=query,
         result=result,
         latency_ms=(time.perf_counter() - started) * 1000,
         request_id_value=getattr(request.state, "request_id", "unknown"),
