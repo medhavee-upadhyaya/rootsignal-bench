@@ -15,6 +15,7 @@ class CustomIncidentStoreTests(unittest.TestCase):
         )
         fixture["id"] = "live-checkout"
         fixture["metadata"]["synthetic"] = False
+        fixture["runbooks"] = []
         fixture.pop("oracle")
         with tempfile.TemporaryDirectory() as directory:
             store = CustomIncidentStore(Path(directory) / "incidents.db")
@@ -23,6 +24,18 @@ class CustomIncidentStoreTests(unittest.TestCase):
             self.assertIsNotNone(incident)
             assert incident is not None
             self.assertIsNone(incident.oracle)
+            self.assertEqual(incident.runbooks, [])
+
+    def test_evaluation_incident_still_requires_a_runbook(self) -> None:
+        fixture = json.loads(
+            Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")
+        )
+        fixture["id"] = "evaluation-without-runbook"
+        fixture["runbooks"] = []
+        with tempfile.TemporaryDirectory() as directory:
+            store = CustomIncidentStore(Path(directory) / "incidents.db")
+            with self.assertRaisesRegex(ValueError, "requires at least one runbook"):
+                store.save(fixture)
 
     def test_custom_incident_persists_without_public_oracle_projection(self) -> None:
         fixture = json.loads(Path("fixtures/incidents/checkout_latency.yaml").read_text())

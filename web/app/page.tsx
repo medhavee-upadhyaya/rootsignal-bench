@@ -112,7 +112,7 @@ function buildFixture(draft: Record<string, string>, includeOracle = true) {
     summary: draft.summary,
     metadata: { failure_class: draft.failureClass, difficulty: draft.difficulty, license: "Proprietary", synthetic: includeOracle },
     telemetry: { metrics, logs: lines(draft.logs), deployments: lines(draft.deployments) },
-    runbooks: [{ id: `${draft.id}-operations`, title: `${draft.title} operations`, content: draft.runbook }],
+    runbooks: draft.runbook.trim() ? [{ id: `${draft.id}-operations`, title: `${draft.title} operations`, content: draft.runbook.trim() }] : [],
   };
   if (includeOracle) fixture.oracle = {
       root_cause: draft.rootCause,
@@ -173,7 +173,7 @@ export default function Home() {
     metrics: "service.error_rate=12%\nservice.latency_p95=1800ms",
     logs: "service ERROR request failed\nservice WARN latency threshold exceeded",
     deployments: "service v2.0 deployed before the incident",
-    runbook: "Inspect correlated signals and the recent deployment. Roll back the unsafe change.",
+    runbook: "",
     rootCause: "", evidence: "error_rate 12%\nlatency_p95 1800ms",
     remediation: "Roll back the unsafe deployment\nAdd an alert for the failure signal",
   });
@@ -672,7 +672,7 @@ export default function Home() {
             <label>METRICS · KEY=VALUE<textarea rows={4} value={incidentDraft.metrics} onChange={(event) => setIncidentDraft({...incidentDraft, metrics: event.target.value})} /></label>
             <label>LOG EVENTS · ONE PER LINE<textarea rows={4} value={incidentDraft.logs} onChange={(event) => setIncidentDraft({...incidentDraft, logs: event.target.value})} /></label>
             <label>DEPLOYMENTS · ONE PER LINE<textarea rows={3} value={incidentDraft.deployments} onChange={(event) => setIncidentDraft({...incidentDraft, deployments: event.target.value})} /></label>
-            <label>RUNBOOK<textarea rows={3} value={incidentDraft.runbook} onChange={(event) => setIncidentDraft({...incidentDraft, runbook: event.target.value})} /></label>
+            <label>RUNBOOK · OPTIONAL FOR LIVE INCIDENTS<textarea rows={3} value={incidentDraft.runbook} onChange={(event) => setIncidentDraft({...incidentDraft, runbook: event.target.value})} placeholder="Optional incident-specific procedure. Scoped knowledge collections remain available." /></label>
             {creatorPurpose === "evaluation" && <><label className="wide private-field">HIDDEN ROOT CAUSE<textarea rows={2} value={incidentDraft.rootCause} onChange={(event) => setIncidentDraft({...incidentDraft, rootCause: event.target.value})} placeholder="Expected diagnosis used only for scoring" /></label>
             <label>REQUIRED EVIDENCE · ONE PER LINE<textarea rows={3} value={incidentDraft.evidence} onChange={(event) => setIncidentDraft({...incidentDraft, evidence: event.target.value})} /></label>
             <label>REMEDIATION · ONE PER LINE<textarea rows={3} value={incidentDraft.remediation} onChange={(event) => setIncidentDraft({...incidentDraft, remediation: event.target.value})} /></label></>}

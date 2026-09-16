@@ -54,9 +54,9 @@ def incident_from_dict(data: dict[str, Any], *, require_oracle: bool = True) -> 
 def validate_fixture(data: dict[str, Any], *, require_oracle: bool = True) -> None:
     if not isinstance(data, dict):
         raise ValueError("Fixture must be an object")
-    required = {"schema_version", "id", "title", "summary", "telemetry", "runbooks", "metadata"}
+    required = {"schema_version", "id", "title", "summary", "telemetry", "metadata"}
     if require_oracle:
-        required.add("oracle")
+        required.update({"oracle", "runbooks"})
     missing = required - data.keys()
     if missing:
         raise ValueError(f"Fixture is missing required fields: {sorted(missing)}")
@@ -76,8 +76,10 @@ def validate_fixture(data: dict[str, Any], *, require_oracle: bool = True) -> No
         raise ValueError("Fixture telemetry requires at least two log events")
     if not isinstance(telemetry.get("deployments"), list) or not telemetry["deployments"]:
         raise ValueError("Fixture telemetry requires deployment history")
-    runbooks = data["runbooks"]
-    if not isinstance(runbooks, list) or not runbooks:
+    runbooks = data.get("runbooks", [])
+    if not isinstance(runbooks, list):
+        raise ValueError("Fixture runbooks must be a list")
+    if require_oracle and not runbooks:
         raise ValueError("Fixture requires at least one runbook")
     runbook_ids = [item.get("id") for item in runbooks if isinstance(item, dict)]
     if len(runbook_ids) != len(runbooks) or len(set(runbook_ids)) != len(runbook_ids):

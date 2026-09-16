@@ -76,6 +76,7 @@ class FullStackInvestigationTests(unittest.TestCase):
         fixture["id"] = f"live-{uuid.uuid4().hex}"
         fixture["title"] = "Live checkout incident"
         fixture["metadata"]["synthetic"] = False
+        fixture["runbooks"] = []
         fixture.pop("oracle")
         status, _, created = asgi_request("POST", "/v1/incidents", body=fixture)
         self.assertEqual(status, 201)
@@ -88,6 +89,7 @@ class FullStackInvestigationTests(unittest.TestCase):
             )
         self.assertEqual(status, 200)
         self.assertEqual(result["record"]["mode"], "model")
+        self.assertTrue(any(item["source"] == "metrics" for item in result["evidence"]))
 
         run_id = result["record"]["run_id"]
         status, _, stored = asgi_request("GET", f"/v1/runs/{run_id}")

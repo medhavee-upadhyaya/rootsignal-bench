@@ -106,6 +106,8 @@ test("separates real incident response from oracle-backed evaluation", async () 
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /Live investigation/);
   assert.match(page, /No answer key · ungraded/);
+  assert.match(page, /RUNBOOK · OPTIONAL FOR LIVE INCIDENTS/);
+  assert.match(page, /draft\.runbook\.trim\(\) \?/);
   assert.match(page, /creatorPurpose === "evaluation"/);
   assert.match(page, /selectedIncident\?\.metadata\.evaluable === false/);
   assert.match(page, /run\.mode === "model" && run\.evaluable/);

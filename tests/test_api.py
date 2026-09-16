@@ -128,6 +128,7 @@ class APITests(unittest.TestCase):
         fixture["id"] = f"live-{uuid.uuid4().hex}"
         fixture["title"] = "Active checkout degradation"
         fixture["metadata"]["synthetic"] = False
+        fixture["runbooks"] = []
         del fixture["oracle"]
 
         status, _, created = asgi_request("POST", "/v1/incidents", body=fixture)
@@ -139,6 +140,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertFalse(detail["metadata"]["evaluable"])
         self.assertIn("telemetry", detail)
+        self.assertEqual(detail["runbooks"], [])
 
         status, _, rejected = asgi_request(
             "POST", "/v1/baselines/deterministic", body={"incident_id": fixture["id"]}

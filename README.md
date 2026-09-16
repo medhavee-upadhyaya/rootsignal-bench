@@ -75,7 +75,7 @@ npm run dev
 
 Open `http://localhost:3000` for the complete investigation workspace. The web server proxies investigation requests to the API at `http://127.0.0.1:8000`; set `INCIDENTLAB_API_URL` to use another backend.
 
-From the workspace, a user can create an ungraded live incident using only observed metrics, logs, deployments, and runbooks. Evaluation authors can instead attach a private oracle for scoring and regression comparison. Live investigations are kept out of benchmark suites; private grading oracles are stored server-side and never returned by catalog APIs.
+From the workspace, a user can create an ungraded live incident using observed metrics, logs, and deployment history. An incident-specific runbook is optional; the agent can still retrieve from the separately selected knowledge collections. Evaluation authors can instead attach a private oracle for scoring and regression comparison. Live investigations are kept out of benchmark suites; private grading oracles are stored server-side and never returned by catalog APIs.
 
 Choose **Live investigation** for active troubleshooting: no known root cause is required, only the connected model can run it, and exports contain evidence without a scorecard. Choose **Evaluation scenario** when you have a reviewed answer key and want control runs, scorecards, comparisons, and suite metrics.
 
