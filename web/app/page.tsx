@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getGuidedWorkflow, type GuidedStepId } from "@/lib/guided-workflow";
 import { findControlAgentPair } from "@/lib/run-pairing";
 import { buildReviewLink, parseReviewLink } from "@/lib/review-links";
+import { MAX_TELEMETRY_FILE_BYTES, parseTelemetryBundle } from "@/lib/telemetry-import";
 
 type Evidence = { source: string; content: string; relevance: number };
 type ToolCall = { name: string; arguments: Record<string, string> };
@@ -573,6 +574,29 @@ export default function Home() {
     }
   }
 
+  async function importTelemetryFile(file: File | undefined) {
+    if (!file) return;
+    setCreatorStatus("Reading telemetry locally…");
+    try {
+      if (file.size > MAX_TELEMETRY_FILE_BYTES) throw new Error("Telemetry bundle must not exceed 1 MB");
+      const imported = parseTelemetryBundle(await file.text());
+      setIncidentDraft((current) => ({
+        ...current,
+        id: imported.id || current.id,
+        title: imported.title || current.title,
+        summary: imported.summary || current.summary,
+        metrics: imported.metrics,
+        logs: imported.logs,
+        deployments: imported.deployments,
+        runbook: imported.runbook || current.runbook,
+      }));
+      setCreatorPurpose("live");
+      setCreatorStatus(`Loaded locally · ${imported.counts.metrics} metrics · ${imported.counts.logs} logs · ${imported.counts.deployments} deployments`);
+    } catch (error) {
+      setCreatorStatus(error instanceof Error ? error.message : "Telemetry import failed");
+    }
+  }
+
   async function indexKnowledge() {
     if (knowledgeText.trim().length < 20) {
       setIndexStatus("Add at least 20 characters.");
@@ -664,6 +688,7 @@ export default function Home() {
           <div className="creator-tabs"><button className={creatorMode === "guided" ? "active" : ""} onClick={() => setCreatorMode("guided")}>Guided builder</button><button className={creatorMode === "json" ? "active" : ""} onClick={() => setCreatorMode("json")}>JSON import</button></div>
           {creatorMode === "guided" ? <div className="creator-form">
             <div className="creator-purpose wide"><button className={creatorPurpose === "live" ? "active" : ""} onClick={() => setCreatorPurpose("live")}><strong>Live investigation</strong><span>No answer key · ungraded</span></button><button className={creatorPurpose === "evaluation" ? "active" : ""} onClick={() => setCreatorPurpose("evaluation")}><strong>Evaluation scenario</strong><span>Hidden oracle · scoreable</span></button></div>
+            <label className="telemetry-upload wide">IMPORT TELEMETRY BUNDLE · JSON<input type="file" accept="application/json,.json" onChange={(event) => { void importTelemetryFile(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /><span>Parsed in your browser · maximum 1 MB · review every field before saving</span></label>
             <label>INCIDENT ID<input value={incidentDraft.id} onChange={(event) => setIncidentDraft({...incidentDraft, id: event.target.value})} placeholder="payments-timeout-custom" /></label>
             <label>TITLE<input value={incidentDraft.title} onChange={(event) => setIncidentDraft({...incidentDraft, title: event.target.value})} placeholder="Payment requests timing out" /></label>
             <label className="wide">PUBLIC SUMMARY<textarea rows={2} value={incidentDraft.summary} onChange={(event) => setIncidentDraft({...incidentDraft, summary: event.target.value})} placeholder="Describe observable symptoms without revealing the answer." /></label>

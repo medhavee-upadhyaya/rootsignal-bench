@@ -81,6 +81,8 @@ Choose **Live investigation** for active troubleshooting: no known root cause is
 
 Each run can use its own investigation question. RootSignal stores that question with the immutable run, exposes query drift in comparisons, and rejects credential-like content before model execution or persistence.
 
+The guided builder can populate a live incident from a local JSON telemetry bundle. Files are parsed in the browser and are not sent to the API until the user reviews the normalized fields and creates the incident. The importer accepts either top-level `metrics`, `logs`, and `deployments` or the same fields under `telemetry`; optional `id`, `title`, `summary`, and `runbooks` use the benchmark fixture shape. The maximum file size is 1 MB.
+
 Run an independent model investigation through the API:
 
 ```bash

@@ -122,6 +122,14 @@ test("lets users define a safe per-run investigation question", async () => {
   assert.doesNotMatch(page, /aria-label="Incident description"[\s\S]{0,80}readOnly/);
 });
 
+test("imports a local telemetry bundle into the incident builder", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /IMPORT TELEMETRY BUNDLE · JSON/);
+  assert.match(page, /parseTelemetryBundle\(await file\.text\(\)\)/);
+  assert.match(page, /Parsed in your browser/);
+  assert.match(page, /review every field before saving/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
