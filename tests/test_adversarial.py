@@ -63,9 +63,14 @@ class AdversarialTests(unittest.TestCase):
         calls = result["tool_calls"]
         self.assertEqual(calls[0]["decision_source"], "policy-fallback")  # type: ignore[index]
         self.assertNotIn("delete_database", [call["name"] for call in calls])  # type: ignore[index]
-        self.assertEqual(result["confidence"], 1.0)
+        self.assertEqual(result["confidence"], 0.25)
+        self.assertEqual(result["run"]["grounding"]["status"], "insufficient")  # type: ignore[index]
+        self.assertEqual(result["root_cause"], "Insufficient cited evidence to support a diagnosis.")
         self.assertTrue(result["evidence"])
-        self.assertEqual(result["remediation"], ["Inspect evidence"])
+        self.assertEqual(
+            result["remediation"],
+            ["Collect and cite evidence from at least two independent signal sources before remediation."],
+        )
 
 
 if __name__ == "__main__":

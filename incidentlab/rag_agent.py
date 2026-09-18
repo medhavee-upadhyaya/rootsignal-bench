@@ -71,14 +71,35 @@ class GroundedAgent:
             {int(value) for value in answer.get("citations", []) if str(value).isdigit() and 1 <= int(value) <= len(evidence)}
         )
         cited_evidence = [evidence[index - 1] for index in valid_citations]
+        source_families = {
+            "knowledge" if str(item["source"]).startswith(("knowledge:", "runbook:")) else str(item["source"])
+            for item in cited_evidence
+        }
+        if not cited_evidence:
+            grounding_status = "insufficient"
+        elif len(source_families) < 2:
+            grounding_status = "limited"
+        else:
+            grounding_status = "grounded"
+        raw_confidence = max(0.0, min(float(answer.get("confidence", 0)), 1.0))
+        confidence = min(raw_confidence, 0.25 if grounding_status == "insufficient" else 0.65 if grounding_status == "limited" else 1.0)
+        root_cause = str(answer.get("root_cause", "Insufficient evidence"))
+        remediation = self._remediation(answer.get("remediation", []))
+        limitations = ["Local compact-model result; verify recommendations before production changes."]
+        if grounding_status == "insufficient":
+            root_cause = "Insufficient cited evidence to support a diagnosis."
+            remediation = ["Collect and cite evidence from at least two independent signal sources before remediation."]
+            limitations.append("The model returned no valid evidence citations; diagnosis was withheld.")
+        elif grounding_status == "limited":
+            limitations.append("Citations cover only one signal source; confidence was capped at 0.65.")
         all_runs = [*planning_runs, generation]
         retrieved = [item for item in evidence if str(item["source"]).startswith("knowledge:")]
         return {
             "incident_id": incident.incident_id,
-            "root_cause": str(answer.get("root_cause", "Insufficient evidence")),
-            "confidence": max(0.0, min(float(answer.get("confidence", 0)), 1.0)),
+            "root_cause": root_cause,
+            "confidence": confidence,
             "evidence": cited_evidence or self._fallback_evidence(evidence),
-            "remediation": self._remediation(answer.get("remediation", [])),
+            "remediation": remediation,
             "tool_calls": [
                 {"name": call.name, "arguments": call.arguments, "decision_source": call.decision_source}
                 for call in calls
@@ -91,10 +112,16 @@ class GroundedAgent:
                 "retrieved_chunks": len(retrieved),
                 "knowledge_collections": self.collection_ids or ["incident-runbooks"],
                 "citation_validity": 1.0 if valid_citations else 0.0,
+                "grounding": {
+                    "status": grounding_status,
+                    "valid_citations": len(valid_citations),
+                    "source_families": sorted(source_families),
+                    "source_diversity": len(source_families),
+                },
                 "agent_steps": len(calls),
                 "model_planned_steps": sum(call.decision_source == "model" for call in calls),
             },
-            "limitations": ["Local compact-model result; verify recommendations before production changes."],
+            "limitations": limitations,
         }
 
     def _choose_next(

@@ -4,11 +4,19 @@ import unittest
 import json
 import logging
 from io import StringIO
+from pathlib import Path
 
 from incidentlab.observability import Metrics, log_event
 
 
 class MetricsTests(unittest.TestCase):
+    def test_ungrounded_answer_alert_has_a_runbook(self) -> None:
+        alerts = Path("deploy/prometheus/alerts.yml").read_text(encoding="utf-8")
+        runbook = Path("docs/OBSERVABILITY.md").read_text(encoding="utf-8")
+        self.assertIn("RootSignalUngroundedAnswers", alerts)
+        self.assertIn("rootsignal_ungrounded_runs_total", alerts)
+        self.assertIn("## Ungrounded answers", runbook)
+
     def test_exports_counter_gauge_and_histogram(self) -> None:
         metrics = Metrics()
         with metrics.investigation():
@@ -29,6 +37,7 @@ class MetricsTests(unittest.TestCase):
                 "agent_steps": 4,
                 "model_planned_steps": 3,
                 "citation_validity": 0,
+                "grounding": {"status": "insufficient"},
             }
         )
         payload = metrics.prometheus()
@@ -37,6 +46,7 @@ class MetricsTests(unittest.TestCase):
         self.assertIn("rootsignal_model_prompt_tokens_total 100", payload)
         self.assertIn("rootsignal_policy_fallback_steps_total 1", payload)
         self.assertIn("rootsignal_invalid_citations_total 1", payload)
+        self.assertIn("rootsignal_ungrounded_runs_total 1", payload)
 
     def test_structured_event_is_machine_readable(self) -> None:
         stream = StringIO()

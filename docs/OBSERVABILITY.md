@@ -13,6 +13,7 @@ RootSignal exposes low-cardinality Prometheus metrics at `/metrics`, emits JSON 
 | Retrieved chunks and agent steps | RAG and agent behavior |
 | Invalid citations | Grounding-quality regression |
 | Policy fallback steps | Model planner degradation |
+| Ungrounded runs | Answers with absent or single-source citation support |
 
 Request IDs appear in responses and structured logs, but never in metric labels. Unknown URL paths are collapsed to `other` to prevent unbounded cardinality. Prompts, evidence, credentials, and document contents are not logged.
 
@@ -31,5 +32,9 @@ Inspect retrieval evaluation and recent knowledge-base changes. Do not suppress 
 ## Planner fallbacks
 
 Confirm model-server health and inspect structured investigation summaries. A fallback spike can indicate invalid model JSON, unavailable tool choices, or inference failures. Use the adversarial suite before modifying guardrails.
+
+## Ungrounded answers
+
+Inspect the saved run's grounding status, cited sources, selected knowledge collections, and raw telemetry coverage. `limited` means valid citations came from only one signal-source family; `insufficient` means no valid citation supported the answer and RootSignal withheld the diagnosis. Improve source coverage or retrieval inputs rather than raising the confidence cap.
 
 Readiness returns HTTP 503 when fixtures or the model server are unavailable, allowing Kubernetes to remove the pod from service. Liveness only confirms that the API process is responsive.

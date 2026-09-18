@@ -15,7 +15,7 @@ type Investigation = {
   evidence: Evidence[];
   remediation: string[];
   tool_calls: ToolCall[];
-  run?: { model: string; latency_ms: number; prompt_tokens: number; completion_tokens: number; retrieved_chunks: number };
+  run?: { model: string; latency_ms: number; prompt_tokens: number; completion_tokens: number; retrieved_chunks: number; grounding?: { status: "grounded" | "limited" | "insufficient"; valid_citations: number; source_families: string[]; source_diversity: number } };
   record?: { run_id: string; created_at: string; mode: ExecutionMode };
 };
 
@@ -845,11 +845,12 @@ export default function Home() {
         <article className="panel diagnosis-panel">
           <div className="panel-heading">
             <div><span className="panel-index coral">02</span><div><p>ROOT CAUSE</p><h2>Evidence-backed diagnosis</h2></div></div>
-            <div className="confidence"><strong>{Math.round(result.confidence * 100)}%</strong><span>confidence</span></div>
+            <div className={`confidence ${result.run?.grounding?.status ?? "control"}`}><strong>{Math.round(result.confidence * 100)}%</strong><span>{result.run?.grounding?.status ?? "control confidence"}</span></div>
           </div>
           <div className="cause">
             <span className="cause-label">PRIMARY CAUSE</span>
             <p>{result.root_cause}</p>
+            {result.run?.grounding && <small className={`grounding-note ${result.run.grounding.status}`}>{result.run.grounding.valid_citations} valid citation{result.run.grounding.valid_citations === 1 ? "" : "s"} across {result.run.grounding.source_diversity} signal source{result.run.grounding.source_diversity === 1 ? "" : "s"}</small>}
           </div>
           <div className="tabs" role="tablist">
             <button className={activeTab === "evidence" ? "active" : ""} onClick={() => setActiveTab("evidence")}>Evidence <b>{result.evidence.length}</b></button>

@@ -142,6 +142,13 @@ test("archives custom incidents with explicit confirmation", async () => {
   assert.match(route, /encodeURIComponent\(incidentId\)/);
 });
 
+test("shows evidence sufficiency instead of trusting model confidence", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /grounding\?: \{ status: "grounded" \| "limited" \| "insufficient"/);
+  assert.match(page, /valid citation/);
+  assert.match(page, /signal source/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

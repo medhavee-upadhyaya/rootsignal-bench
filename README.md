@@ -47,6 +47,8 @@ Most agent demos grade the final prose. RootSignal Bench grades the investigatio
 | Outcome | Root-cause accuracy and remediation coverage |
 | Systems | Time-to-first-token, latency, throughput, tokens, and cost |
 
+Model confidence is never accepted on its own. RootSignal marks a diagnosis `grounded` only when valid citations span at least two signal-source families. Single-source answers are marked `limited` and capped at `0.65`; answers without valid citations are withheld, capped at `0.25`, and recorded by an observability counter.
+
 ## Five-minute quickstart
 
 ```bash
