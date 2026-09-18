@@ -130,6 +130,18 @@ test("imports a local telemetry bundle into the incident builder", async () => {
   assert.match(page, /review every field before saving/);
 });
 
+test("archives custom incidents with explicit confirmation", async () => {
+  const [page, route] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/incidents/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /Confirm archive/);
+  assert.match(page, /archiveSelectedIncident/);
+  assert.match(page, /catalog_source === "custom"/);
+  assert.match(route, /export async function DELETE/);
+  assert.match(route, /encodeURIComponent\(incidentId\)/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

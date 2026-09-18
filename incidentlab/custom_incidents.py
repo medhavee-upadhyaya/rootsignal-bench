@@ -62,10 +62,17 @@ class CustomIncidentStore:
                     incident_id TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
                     fixture_sha256 TEXT NOT NULL,
-                    fixture_json TEXT NOT NULL
+                    fixture_json TEXT NOT NULL,
+                    archived_at TEXT
                 );
                 """
             )
+            columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(custom_incidents)").fetchall()
+            }
+            if "archived_at" not in columns:
+                connection.execute("ALTER TABLE custom_incidents ADD COLUMN archived_at TEXT")
 
     def save(self, fixture: dict[str, Any]) -> dict[str, str]:
         validate_custom_fixture(fixture)
@@ -75,7 +82,11 @@ class CustomIncidentStore:
         try:
             with self._connect() as connection:
                 connection.execute(
-                    "INSERT INTO custom_incidents VALUES (?, ?, ?, ?)",
+                    """
+                    INSERT INTO custom_incidents(
+                        incident_id, created_at, fixture_sha256, fixture_json, archived_at
+                    ) VALUES (?, ?, ?, ?, NULL)
+                    """,
                     (fixture["id"], created_at, digest, serialized),
                 )
         except sqlite3.IntegrityError as exc:
@@ -99,6 +110,23 @@ class CustomIncidentStore:
     def list(self) -> list[Incident]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT fixture_json FROM custom_incidents ORDER BY created_at, incident_id"
+                """
+                SELECT fixture_json FROM custom_incidents
+                WHERE archived_at IS NULL ORDER BY created_at, incident_id
+                """
             ).fetchall()
         return [incident_from_dict(json.loads(row["fixture_json"]), require_oracle=False) for row in rows]
+
+    def archive(self, incident_id: str) -> dict[str, str] | None:
+        archived_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE custom_incidents SET archived_at = ?
+                WHERE incident_id = ? AND archived_at IS NULL
+                """,
+                (archived_at, incident_id),
+            )
+        if cursor.rowcount == 0:
+            return None
+        return {"incident_id": incident_id, "archived_at": archived_at, "status": "archived"}

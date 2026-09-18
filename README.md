@@ -83,6 +83,8 @@ Each run can use its own investigation question. RootSignal stores that question
 
 The guided builder can populate a live incident from a local JSON telemetry bundle. Files are parsed in the browser and are not sent to the API until the user reviews the normalized fields and creates the incident. The importer accepts either top-level `metrics`, `logs`, and `deployments` or the same fields under `telemetry`; optional `id`, `title`, `summary`, and `runbooks` use the benchmark fixture shape. The maximum file size is 1 MB.
 
+Custom incidents can be archived from the workspace with an explicit confirmation. Archival removes them from the active catalog without deleting their immutable fixture snapshot, so existing run history and evidence exports remain reproducible. Built-in benchmark incidents cannot be archived.
+
 Run an independent model investigation through the API:
 
 ```bash

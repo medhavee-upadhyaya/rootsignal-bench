@@ -168,6 +168,7 @@ export default function Home() {
   const [creatorMode, setCreatorMode] = useState<"guided" | "json">("guided");
   const [creatorPurpose, setCreatorPurpose] = useState<"live" | "evaluation">("live");
   const [creatorStatus, setCreatorStatus] = useState("");
+  const [archiveConfirmId, setArchiveConfirmId] = useState("");
   const [jsonFixture, setJsonFixture] = useState("");
   const [incidentDraft, setIncidentDraft] = useState({
     id: "", title: "", summary: "", failureClass: "custom-incident", difficulty: "medium",
@@ -597,6 +598,28 @@ export default function Home() {
     }
   }
 
+  async function archiveSelectedIncident() {
+    if (!selectedIncident || selectedIncident.metadata.catalog_source !== "custom") return;
+    if (archiveConfirmId !== selectedIncident.id) {
+      setArchiveConfirmId(selectedIncident.id);
+      return;
+    }
+    setRunError("");
+    try {
+      const response = await fetch(`/api/incidents?incident_id=${encodeURIComponent(selectedIncident.id)}`, { method: "DELETE" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || "Archival failed");
+      const catalogResponse = await fetch("/api/incidents", { cache: "no-store" });
+      if (!catalogResponse.ok) throw new Error("Catalog refresh failed");
+      const updatedCatalog: IncidentCatalog = await catalogResponse.json();
+      setCatalog(updatedCatalog);
+      setArchiveConfirmId("");
+      if (updatedCatalog.incidents.length) selectIncident(updatedCatalog.incidents[0].id);
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : "Archival failed");
+    }
+  }
+
   async function indexKnowledge() {
     if (knowledgeText.trim().length < 20) {
       setIndexStatus("Add at least 20 characters.");
@@ -730,6 +753,7 @@ export default function Home() {
               <span>{selectedIncident.metadata.catalog_source}</span>
               <span>{selectedIncident.metadata.evaluable === false ? "live · ungraded" : "evaluation · scoreable"}</span>
               <span>{Object.values(selectedIncident.observation_counts).reduce((sum, count) => sum + count, 0)} observations</span>
+              {selectedIncident.metadata.catalog_source === "custom" && <button className={archiveConfirmId === selectedIncident.id ? "confirm" : ""} onClick={archiveSelectedIncident} onBlur={() => setArchiveConfirmId("")}>{archiveConfirmId === selectedIncident.id ? "Confirm archive" : "Archive"}</button>}
             </div>
           )}
         </div>

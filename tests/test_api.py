@@ -159,6 +159,29 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(payload["error"]["code"], "not_found")
 
+    def test_custom_incident_can_be_archived_without_breaking_historical_resolution(self) -> None:
+        fixture = json.loads(
+            Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")
+        )
+        fixture["id"] = f"archive-{uuid.uuid4().hex}"
+        status, _, _ = asgi_request("POST", "/v1/incidents", body=fixture)
+        self.assertEqual(status, 201)
+
+        status, _, archived = asgi_request("DELETE", f"/v1/incidents/{fixture['id']}")
+        self.assertEqual(status, 200)
+        self.assertEqual(archived["status"], "archived")
+
+        _, _, catalog = asgi_request("GET", "/v1/incidents")
+        self.assertNotIn(fixture["id"], [item["id"] for item in catalog["incidents"]])
+        status, _, detail = asgi_request("GET", f"/v1/incidents/{fixture['id']}")
+        self.assertEqual(status, 200)
+        self.assertEqual(detail["id"], fixture["id"])
+
+    def test_built_in_incident_cannot_be_archived(self) -> None:
+        status, _, payload = asgi_request("DELETE", "/v1/incidents/checkout-latency-001")
+        self.assertEqual(status, 409)
+        self.assertIn("cannot be archived", payload["error"]["message"])
+
     def test_knowledge_collection_can_be_created_listed_and_indexed(self) -> None:
         collection_id = f"team-{uuid.uuid4().hex}"
         status, _, created = asgi_request(

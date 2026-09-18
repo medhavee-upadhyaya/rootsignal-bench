@@ -386,6 +386,16 @@ def incident_detail(incident_id: str) -> dict[str, object]:
     return _public_incident(incident, include_observations=True)
 
 
+@app.delete("/v1/incidents/{incident_id}")
+def archive_incident(incident_id: str) -> dict[str, str]:
+    if _incident_path(incident_id) is not None:
+        raise HTTPException(status_code=409, detail="Built-in incidents cannot be archived")
+    archived = CUSTOM_INCIDENTS.archive(incident_id)
+    if archived is None:
+        raise HTTPException(status_code=404, detail="Unknown or already archived incident")
+    return archived
+
+
 @app.get("/v1/runs")
 def list_runs(limit: int = 20, cursor: str | None = None) -> dict[str, object]:
     safe_limit = min(max(limit, 1), 100)
