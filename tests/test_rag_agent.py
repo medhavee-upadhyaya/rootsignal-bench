@@ -33,6 +33,12 @@ class FakeLLM:
         return Generation(content, self.model, 1.0, 10, 5)
 
 
+class AdaptiveLLM(FakeLLM):
+    def __init__(self) -> None:
+        super().__init__([1, 5])
+        self.plans = iter(["finish", "query_logs", "finish"])
+
+
 class GroundedAgentTests(unittest.TestCase):
     def test_model_plans_bounded_tools_and_retrieves_knowledge(self) -> None:
         incident = load_incident("fixtures/incidents/checkout_latency.yaml")
@@ -64,6 +70,16 @@ class GroundedAgentTests(unittest.TestCase):
             result = GroundedAgent(knowledge, FakeLLM([1, 5])).investigate(incident.summary, incident)  # type: ignore[arg-type]
         self.assertEqual(result["run"]["grounding"]["status"], "grounded")  # type: ignore[index]
         self.assertEqual(result["confidence"], 0.9)
+
+    def test_finish_is_rejected_until_multiple_signal_families_exist(self) -> None:
+        incident = load_incident("fixtures/incidents/checkout_latency.yaml")
+        with tempfile.TemporaryDirectory() as directory:
+            knowledge = KnowledgeBase(Path(directory) / "knowledge.db")
+            result = GroundedAgent(knowledge, AdaptiveLLM()).investigate(incident.summary, incident)  # type: ignore[arg-type]
+        self.assertEqual([call["name"] for call in result["tool_calls"]], ["query_metrics", "query_logs"])
+        self.assertEqual(result["tool_calls"][0]["decision_source"], "policy-fallback")
+        self.assertEqual(result["run"]["stop_reason"], "model_finish")  # type: ignore[index]
+        self.assertTrue(result["run"]["model_requested_stop"])  # type: ignore[index]
 
 
 if __name__ == "__main__":

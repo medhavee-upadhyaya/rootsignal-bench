@@ -14,6 +14,7 @@ RootSignal exposes low-cardinality Prometheus metrics at `/metrics`, emits JSON 
 | Invalid citations | Grounding-quality regression |
 | Policy fallback steps | Model planner degradation |
 | Ungrounded runs | Answers with absent or single-source citation support |
+| Adaptive stops | Model-requested completion after sufficient multi-source evidence |
 
 Request IDs appear in responses and structured logs, but never in metric labels. Unknown URL paths are collapsed to `other` to prevent unbounded cardinality. Prompts, evidence, credentials, and document contents are not logged.
 

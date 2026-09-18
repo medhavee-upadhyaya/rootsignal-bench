@@ -149,6 +149,12 @@ test("shows evidence sufficiency instead of trusting model confidence", async ()
   assert.match(page, /signal source/);
 });
 
+test("discloses why the adaptive agent stopped using tools", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /stop_reason\?: "model_finish" \| "tools_exhausted" \| "step_budget"/);
+  assert.match(page, /model stopped after sufficient evidence/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

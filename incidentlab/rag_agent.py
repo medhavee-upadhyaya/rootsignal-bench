@@ -43,16 +43,24 @@ class GroundedAgent:
         calls: list[PlannedCall] = []
         planning_runs: list[Generation] = []
         remaining = list(self.TOOL_DESCRIPTIONS)
+        stop_reason = "tools_exhausted"
 
         for _ in range(self.max_steps):
             if not remaining:
                 break
-            call, generation = self._choose_next(query, evidence, remaining)
+            call, generation = self._choose_next(
+                query, evidence, remaining, allow_finish=len(self._source_families(evidence)) >= 2
+            )
             if generation:
                 planning_runs.append(generation)
+            if call.name == "finish":
+                stop_reason = "model_finish"
+                break
             calls.append(call)
             remaining.remove(call.name)
             evidence.extend(self._execute(call, incident, query, evidence))
+        if remaining and stop_reason != "model_finish":
+            stop_reason = "step_budget"
 
         numbered = "\n".join(
             f"[{index}] source={item['source']} | {item['content']}" for index, item in enumerate(evidence, 1)
@@ -71,10 +79,7 @@ class GroundedAgent:
             {int(value) for value in answer.get("citations", []) if str(value).isdigit() and 1 <= int(value) <= len(evidence)}
         )
         cited_evidence = [evidence[index - 1] for index in valid_citations]
-        source_families = {
-            "knowledge" if str(item["source"]).startswith(("knowledge:", "runbook:")) else str(item["source"])
-            for item in cited_evidence
-        }
+        source_families = self._source_families(cited_evidence)
         if not cited_evidence:
             grounding_status = "insufficient"
         elif len(source_families) < 2:
@@ -120,23 +125,28 @@ class GroundedAgent:
                 },
                 "agent_steps": len(calls),
                 "model_planned_steps": sum(call.decision_source == "model" for call in calls),
+                "stop_reason": stop_reason,
+                "model_requested_stop": stop_reason == "model_finish",
             },
             "limitations": limitations,
         }
 
     def _choose_next(
-        self, query: str, evidence: list[dict[str, object]], remaining: list[str]
+        self, query: str, evidence: list[dict[str, object]], remaining: list[str], *, allow_finish: bool
     ) -> tuple[PlannedCall, Generation | None]:
         observations = "\n".join(f"- {item['source']}: {item['content']}" for item in evidence[-8:]) or "None yet"
         tools = "\n".join(f"- {name}: {self.TOOL_DESCRIPTIONS[name]}" for name in remaining)
+        finish = "\n- finish: Stop because the collected evidence is sufficient." if allow_finish else ""
         try:
             generation = self.llm.generate_json(
-                "Choose the single best next read-only diagnostic tool. Return compact JSON with name and arguments.",
-                f"Incident: {query}\nObservations:\n{observations}\nAvailable tools:\n{tools}",
+                "Choose the single best next read-only diagnostic action. Return compact JSON with name and arguments.",
+                f"Incident: {query}\nObservations:\n{observations}\nAvailable actions:\n{tools}{finish}",
                 max_tokens=100,
             )
             answer = self._json(generation.content)
             name = str(answer.get("name", ""))
+            if name == "finish" and allow_finish:
+                return PlannedCall("finish", {}, "model"), generation
             if name not in remaining:
                 raise ValueError("Model selected an unavailable tool")
             arguments = answer.get("arguments", {})
@@ -207,6 +217,13 @@ class GroundedAgent:
     def _fallback_evidence(evidence: list[dict[str, object]]) -> list[dict[str, object]]:
         preferred = [item for item in evidence if item["source"] in {"deployments", "metrics"} or str(item["source"]).startswith("knowledge:")]
         return (preferred or evidence)[:6]
+
+    @staticmethod
+    def _source_families(evidence: list[dict[str, object]]) -> set[str]:
+        return {
+            "knowledge" if str(item["source"]).startswith(("knowledge:", "runbook:")) else str(item["source"])
+            for item in evidence
+        }
 
     @staticmethod
     def _remediation(value: object) -> list[str]:

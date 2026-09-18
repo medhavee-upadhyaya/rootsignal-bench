@@ -43,6 +43,7 @@ class Snapshot:
     invalid_citations: int
     policy_fallback_steps: int
     ungrounded_runs: int
+    adaptive_stops: int
 
 
 class Metrics:
@@ -63,6 +64,7 @@ class Metrics:
         self._invalid_citations = 0
         self._policy_fallback_steps = 0
         self._ungrounded_runs = 0
+        self._adaptive_stops = 0
 
     @contextmanager
     def investigation(self) -> Iterator[None]:
@@ -106,6 +108,7 @@ class Metrics:
             grounding = run.get("grounding", {})
             grounding_status = grounding.get("status") if isinstance(grounding, Mapping) else None
             self._ungrounded_runs += int(grounding_status in {"limited", "insufficient"})
+            self._adaptive_stops += int(run.get("stop_reason") == "model_finish")
 
     def snapshot(self) -> Snapshot:
         with self._lock:
@@ -124,6 +127,7 @@ class Metrics:
                 self._invalid_citations,
                 self._policy_fallback_steps,
                 self._ungrounded_runs,
+                self._adaptive_stops,
             )
 
     def prometheus(self) -> str:
@@ -181,6 +185,7 @@ class Metrics:
             "invalid_citations_total": snapshot.invalid_citations,
             "policy_fallback_steps_total": snapshot.policy_fallback_steps,
             "ungrounded_runs_total": snapshot.ungrounded_runs,
+            "adaptive_stops_total": snapshot.adaptive_stops,
         }
         for name, value in counters.items():
             lines.extend([f"# TYPE rootsignal_{name} counter", f"rootsignal_{name} {value}"])

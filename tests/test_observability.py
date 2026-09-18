@@ -38,6 +38,7 @@ class MetricsTests(unittest.TestCase):
                 "model_planned_steps": 3,
                 "citation_validity": 0,
                 "grounding": {"status": "insufficient"},
+                "stop_reason": "model_finish",
             }
         )
         payload = metrics.prometheus()
@@ -47,6 +48,7 @@ class MetricsTests(unittest.TestCase):
         self.assertIn("rootsignal_policy_fallback_steps_total 1", payload)
         self.assertIn("rootsignal_invalid_citations_total 1", payload)
         self.assertIn("rootsignal_ungrounded_runs_total 1", payload)
+        self.assertIn("rootsignal_adaptive_stops_total 1", payload)
 
     def test_structured_event_is_machine_readable(self) -> None:
         stream = StringIO()

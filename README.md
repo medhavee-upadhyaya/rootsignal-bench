@@ -49,6 +49,8 @@ Most agent demos grade the final prose. RootSignal Bench grades the investigatio
 
 Model confidence is never accepted on its own. RootSignal marks a diagnosis `grounded` only when valid citations span at least two signal-source families. Single-source answers are marked `limited` and capped at `0.65`; answers without valid citations are withheld, capped at `0.25`, and recorded by an observability counter.
 
+Tool use is adaptive within a hard step budget. The planner may choose `finish` only after observations span at least two signal-source families; premature stop requests are rejected and replaced with the next safe read-only tool. Every run records whether it stopped on sufficient evidence, exhausted available tools, or reached its step budget.
+
 ## Five-minute quickstart
 
 ```bash

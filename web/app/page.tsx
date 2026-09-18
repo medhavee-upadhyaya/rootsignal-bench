@@ -15,7 +15,7 @@ type Investigation = {
   evidence: Evidence[];
   remediation: string[];
   tool_calls: ToolCall[];
-  run?: { model: string; latency_ms: number; prompt_tokens: number; completion_tokens: number; retrieved_chunks: number; grounding?: { status: "grounded" | "limited" | "insufficient"; valid_citations: number; source_families: string[]; source_diversity: number } };
+  run?: { model: string; latency_ms: number; prompt_tokens: number; completion_tokens: number; retrieved_chunks: number; stop_reason?: "model_finish" | "tools_exhausted" | "step_budget"; model_requested_stop?: boolean; grounding?: { status: "grounded" | "limited" | "insufficient"; valid_citations: number; source_families: string[]; source_diversity: number } };
   record?: { run_id: string; created_at: string; mode: ExecutionMode };
 };
 
@@ -839,7 +839,7 @@ export default function Home() {
               </li>
             ))}
           </ol>
-          <div className="trace-footer"><span>{result.tool_calls.length} tool calls</span><span>{result.evidence.length} cited items</span><span>{completedMode === "model" ? result.run?.model || "model" : "oracle-backed control"}</span></div>
+          <div className="trace-footer"><span>{result.tool_calls.length} tool calls</span><span>{result.evidence.length} cited items</span><span>{result.run?.stop_reason === "model_finish" ? "model stopped after sufficient evidence" : result.run?.stop_reason?.replaceAll("_", " ") || (completedMode === "model" ? result.run?.model || "model" : "oracle-backed control")}</span></div>
         </article>
 
         <article className="panel diagnosis-panel">
