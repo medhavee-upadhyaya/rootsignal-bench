@@ -4,6 +4,8 @@ import hashlib
 import json
 import logging
 import os
+import queue
+import threading
 import time
 from pathlib import Path
 from typing import Annotated
@@ -11,7 +13,7 @@ from typing import Annotated
 try:
     from fastapi import FastAPI, HTTPException, Request, Response
     from fastapi.exceptions import RequestValidationError
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, StreamingResponse
     from pydantic import BaseModel, Field
 except ImportError as exc:  # pragma: no cover
     raise RuntimeError("Install RootSignal with the 'api' dependency group") from exc
@@ -49,6 +51,7 @@ RATE_LIMITER = RateLimiter(
 )
 RATE_LIMITED_PATHS = {
     "/v1/investigations",
+    "/v1/investigations/stream",
     "/v1/knowledge",
     "/v1/baselines/deterministic",
     "/v1/comparisons",
@@ -549,6 +552,69 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
                 exc_info=exc,
             )
             raise HTTPException(status_code=503, detail="Local model unavailable") from exc
+
+
+@app.post("/v1/investigations/stream")
+def stream_investigation(payload: InvestigationRequest, request: Request) -> StreamingResponse:
+    incident = _incident(payload.incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Unknown incident")
+    collections = _validated_collections(payload.collection_ids)
+    query_text = _validated_query(payload.query, incident)
+    request_id_value = getattr(request.state, "request_id", "unknown")
+    events: queue.Queue[dict[str, object] | None] = queue.Queue()
+
+    def publish(event: dict[str, object]) -> None:
+        events.put(event)
+
+    def worker() -> None:
+        started = time.perf_counter()
+        try:
+            with METRICS.investigation():
+                with trace_span(
+                    "rootsignal.investigate",
+                    {"rootsignal.incident_id": incident.incident_id, "rootsignal.model": LLM.model},
+                ):
+                    result = GroundedAgent(
+                        KNOWLEDGE, LLM, collection_ids=collections, on_event=publish
+                    ).investigate(query_text, incident)
+                run = result.get("run", {})
+                if isinstance(run, dict):
+                    METRICS.record_agent_run(run)
+                recorded = _record_result(
+                    incident=incident,
+                    mode="model",
+                    query=query_text,
+                    result=result,
+                    latency_ms=(time.perf_counter() - started) * 1000,
+                    request_id_value=request_id_value,
+                    collection_ids=collections,
+                )
+                log_event(
+                    LOGGER,
+                    "investigation_completed",
+                    incident_id=incident.incident_id,
+                    request_id=request_id_value,
+                    run=run,
+                    transport="ndjson",
+                )
+                publish({"type": "complete", "result": recorded})
+        except Exception:
+            LOGGER.exception("Streaming investigation failed request_id=%s", request_id_value)
+            publish({"type": "error", "message": "Local model unavailable", "request_id": request_id_value})
+        finally:
+            events.put(None)
+
+    def body():
+        threading.Thread(target=worker, daemon=True).start()
+        while (event := events.get()) is not None:
+            yield json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+
+    return StreamingResponse(
+        body(),
+        media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/v1/baselines/deterministic")

@@ -137,6 +137,7 @@ export default function Home() {
   const [copiedCommand, setCopiedCommand] = useState("");
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState("");
+  const [progress, setProgress] = useState("Idle");
   const [activeTab, setActiveTab] = useState<"evidence" | "remediation">("evidence");
   const [source, setSource] = useState("runbook/custom-operations");
   const [knowledgeText, setKnowledgeText] = useState("");
@@ -389,6 +390,7 @@ export default function Home() {
     if (!selectedIncidentId || !verifiedCollectionIds.length) return;
     setRunning(true);
     setRunError("");
+    setProgress("Starting investigation…");
     try {
       const response = await fetch("/api/investigate", {
         method: "POST",
@@ -397,11 +399,41 @@ export default function Home() {
           incident_id: selectedIncidentId,
           query,
           mode,
+          stream: mode === "model",
           collection_ids: verifiedCollectionIds,
         }),
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error?.message || payload.detail || "Investigation failed");
+      let payload: Investigation;
+      if (mode === "model" && response.headers.get("content-type")?.includes("application/x-ndjson")) {
+        if (!response.body) throw new Error("Progress stream unavailable");
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let completed: Investigation | null = null;
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value, { stream: !done });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines.filter(Boolean)) {
+            const event = JSON.parse(line);
+            if (event.type === "planning") setProgress(`Planning step ${event.step}…`);
+            if (event.type === "tool_completed") setProgress(`${String(event.tool).replaceAll("_", " ")} · ${event.evidence_items} evidence items`);
+            if (event.type === "stopped") setProgress("Evidence sufficient · preparing diagnosis…");
+            if (event.type === "synthesizing") setProgress(`Synthesizing from ${event.evidence_items} observations…`);
+            if (event.type === "error") throw new Error(event.message || "Investigation failed");
+            if (event.type === "complete") completed = event.result;
+          }
+          if (done) break;
+        }
+        if (!completed) throw new Error("Investigation stream ended before completion");
+        payload = completed;
+      } else {
+        const value = await response.json();
+        if (!response.ok) throw new Error(value.error?.message || value.detail || "Investigation failed");
+        payload = value;
+      }
+      if (!response.ok) throw new Error("Investigation failed");
       setResult(payload);
       setCompletedMode(mode);
       setActiveRunId(payload.record?.run_id ?? null);
@@ -422,6 +454,7 @@ export default function Home() {
       await refreshRuns();
       if (payload.record?.run_id) await loadRun(payload.record.run_id, false);
       if (mode === "baseline" && system?.llm.healthy) setMode("model");
+      setProgress("Investigation complete");
     } catch (error) {
       setResult(null);
       setRunError(error instanceof Error ? error.message : "Investigation failed");
@@ -809,6 +842,7 @@ export default function Home() {
             {running ? <><span className="spinner" /> Investigating</> : <>Run {mode === "baseline" ? "control" : "agent"} <span>→</span></>}
           </button>
         </div>
+        {running && <div className="investigation-progress" role="status"><i /><span>{progress}</span></div>}
         <div className="command-meta">
           <span><i className="dot green" /> {selectedIncident?.id ?? "catalog loading"}</span>
           <span><i className="dot amber" /> {selectedIncident?.metadata.difficulty ?? "—"}</span>

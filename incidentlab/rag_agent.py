@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Callable
 
 from .knowledge import KnowledgeBase, RetrievedChunk
 from .llm import Generation, OllamaClient
@@ -32,11 +33,13 @@ class GroundedAgent:
         llm: OllamaClient,
         max_steps: int = 4,
         collection_ids: list[str] | None = None,
+        on_event: Callable[[dict[str, object]], None] | None = None,
     ) -> None:
         self.knowledge = knowledge
         self.llm = llm
         self.max_steps = max_steps
         self.collection_ids = collection_ids
+        self.on_event = on_event or (lambda event: None)
 
     def investigate(self, query: str, incident: Incident) -> dict[str, object]:
         evidence: list[dict[str, object]] = []
@@ -48,6 +51,7 @@ class GroundedAgent:
         for _ in range(self.max_steps):
             if not remaining:
                 break
+            self.on_event({"type": "planning", "step": len(calls) + 1})
             call, generation = self._choose_next(
                 query, evidence, remaining, allow_finish=len(self._source_families(evidence)) >= 2
             )
@@ -55,16 +59,25 @@ class GroundedAgent:
                 planning_runs.append(generation)
             if call.name == "finish":
                 stop_reason = "model_finish"
+                self.on_event({"type": "stopped", "reason": stop_reason, "steps": len(calls)})
                 break
             calls.append(call)
             remaining.remove(call.name)
-            evidence.extend(self._execute(call, incident, query, evidence))
+            new_evidence = self._execute(call, incident, query, evidence)
+            evidence.extend(new_evidence)
+            self.on_event({
+                "type": "tool_completed",
+                "step": len(calls),
+                "tool": call.name,
+                "evidence_items": len(new_evidence),
+            })
         if remaining and stop_reason != "model_finish":
             stop_reason = "step_budget"
 
         numbered = "\n".join(
             f"[{index}] source={item['source']} | {item['content']}" for index, item in enumerate(evidence, 1)
         )
+        self.on_event({"type": "synthesizing", "evidence_items": len(evidence)})
         generation = self.llm.generate_json(
             system=(
                 "You are a read-only production incident investigator. Use only supplied evidence. Return valid "

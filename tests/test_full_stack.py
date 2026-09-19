@@ -11,7 +11,7 @@ from unittest.mock import patch
 try:
     from incidentlab.api import METRICS
     from incidentlab.evidence_bundle import verify_evidence_bundle
-    from tests.test_api import asgi_request
+    from tests.test_api import asgi_raw_request, asgi_request
 except (ImportError, RuntimeError):
     METRICS = None  # type: ignore[assignment]
 
@@ -69,6 +69,43 @@ class OpenAIProvider:
 
 @unittest.skipIf(METRICS is None, "API dependencies are not installed")
 class FullStackInvestigationTests(unittest.TestCase):
+    def test_streaming_api_emits_real_progress_and_persists_final_run(self) -> None:
+        provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):
+            status, headers, body = asgi_raw_request(
+                "POST",
+                "/v1/investigations/stream",
+                body={"incident_id": "checkout-latency-001"},
+            )
+        events = [json.loads(line) for line in body.decode().splitlines()]
+        self.assertEqual(status, 200)
+        self.assertIn("application/x-ndjson", headers["content-type"])
+        self.assertEqual(events[0]["type"], "planning")
+        self.assertEqual(sum(event["type"] == "tool_completed" for event in events), 4)
+        self.assertEqual(events[-2]["type"], "synthesizing")
+        self.assertEqual(events[-1]["type"], "complete")
+        run_id = events[-1]["result"]["record"]["run_id"]
+        stored_status, _, stored = asgi_request("GET", f"/v1/runs/{run_id}")
+        self.assertEqual(stored_status, 200)
+        self.assertEqual(stored["run_id"], run_id)
+
+    def test_streaming_provider_failure_is_a_safe_terminal_event(self) -> None:
+        with self.assertLogs("rootsignal.api", level="ERROR"):
+            with patch(
+                "incidentlab.llm.urllib.request.urlopen",
+                side_effect=urllib.error.URLError("private provider detail"),
+            ):
+                status, _, body = asgi_raw_request(
+                    "POST",
+                    "/v1/investigations/stream",
+                    body={"incident_id": "checkout-latency-001"},
+                )
+        events = [json.loads(line) for line in body.decode().splitlines()]
+        self.assertEqual(status, 200)
+        self.assertEqual(events[-1]["type"], "error")
+        self.assertEqual(events[-1]["message"], "Local model unavailable")
+        self.assertNotIn("private provider detail", body.decode())
+
     def test_observation_only_live_incident_runs_end_to_end_without_scoring(self) -> None:
         fixture = json.loads(
             Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")

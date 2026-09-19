@@ -333,6 +333,16 @@ def asgi_request(
     body: dict[str, object] | None = None,
     headers: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, str], dict[str, object]]:
+    status, response_headers, response_body = asgi_raw_request(method, path, body, headers)
+    return status, response_headers, json.loads(response_body or b"{}")
+
+
+def asgi_raw_request(
+    method: str,
+    path: str,
+    body: dict[str, object] | None = None,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str], bytes]:
     target = urlsplit(path)
     encoded = json.dumps(body).encode() if body is not None else b""
     request_headers = {"host": "test", **(headers or {})}
@@ -346,7 +356,8 @@ def asgi_request(
         if not received:
             received = True
             return {"type": "http.request", "body": encoded, "more_body": False}
-        return {"type": "http.disconnect"}
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
 
     async def send(message: dict[str, object]) -> None:
         messages.append(message)
@@ -373,7 +384,7 @@ def asgi_request(
     response_body = b"".join(
         message.get("body", b"") for message in messages if message["type"] == "http.response.body"
     )
-    return int(start["status"]), response_headers, json.loads(response_body or b"{}")
+    return int(start["status"]), response_headers, response_body
 
 
 if __name__ == "__main__":

@@ -155,6 +155,19 @@ test("discloses why the adaptive agent stopped using tools", async () => {
   assert.match(page, /model stopped after sufficient evidence/);
 });
 
+test("renders real streamed agent progress", async () => {
+  const [page, route] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /response\.body\.getReader\(\)/);
+  assert.match(page, /Planning step/);
+  assert.match(page, /Synthesizing from/);
+  assert.match(page, /role="status"/);
+  assert.match(route, /\/v1\/investigations\/stream/);
+  assert.match(route, /new Response\(response\.body/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

@@ -5,7 +5,9 @@ export async function POST(request: Request) {
   }
   const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
   try {
-    const endpoint = body.mode === "model" ? "/v1/investigations" : "/v1/baselines/deterministic";
+    const endpoint = body.mode === "model"
+      ? (body.stream ? "/v1/investigations/stream" : "/v1/investigations")
+      : "/v1/baselines/deterministic";
     const response = await fetch(`${apiBase}${endpoint}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -15,9 +17,9 @@ export async function POST(request: Request) {
         collection_ids: body.collection_ids,
       }),
     });
-    return new Response(await response.text(), {
+    return new Response(response.body, {
       status: response.status,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": response.headers.get("content-type") || "application/json" },
     });
   } catch {
     return Response.json({ detail: "RootSignal API unavailable" }, { status: 503 });

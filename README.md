@@ -51,6 +51,8 @@ Model confidence is never accepted on its own. RootSignal marks a diagnosis `gro
 
 Tool use is adaptive within a hard step budget. The planner may choose `finish` only after observations span at least two signal-source families; premature stop requests are rejected and replaced with the next safe read-only tool. Every run records whether it stopped on sufficient evidence, exhausted available tools, or reached its step budget.
 
+Model investigations also expose an NDJSON progress stream. The workspace renders real planner, completed-tool, adaptive-stop, synthesis, and final-result events while preserving the same immutable result record as the regular JSON endpoint.
+
 ## Five-minute quickstart
 
 ```bash
