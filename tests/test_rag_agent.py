@@ -17,8 +17,10 @@ class FakeLLM:
     def __init__(self, citations: list[int] | None = None) -> None:
         self.plans = iter(["query_metrics", "query_logs", "query_deployments", "retrieve_knowledge"])
         self.citations = citations if citations is not None else [1, 3]
+        self.token_limits: list[int] = []
 
     def generate_json(self, system: str, user: str, max_tokens: int = 500) -> Generation:
+        self.token_limits.append(max_tokens)
         if "single best next" in system:
             content = json.dumps({"name": next(self.plans), "arguments": {}})
         else:
@@ -80,6 +82,21 @@ class GroundedAgentTests(unittest.TestCase):
         self.assertEqual(result["tool_calls"][0]["decision_source"], "policy-fallback")
         self.assertEqual(result["run"]["stop_reason"], "model_finish")  # type: ignore[index]
         self.assertTrue(result["run"]["model_requested_stop"])  # type: ignore[index]
+
+    def test_enforces_and_records_step_and_synthesis_budgets(self) -> None:
+        incident = load_incident("fixtures/incidents/checkout_latency.yaml")
+        llm = FakeLLM()
+        with tempfile.TemporaryDirectory() as directory:
+            knowledge = KnowledgeBase(Path(directory) / "knowledge.db")
+            result = GroundedAgent(
+                knowledge, llm, max_steps=2, max_completion_tokens=128
+            ).investigate(incident.summary, incident)  # type: ignore[arg-type]
+        self.assertEqual(len(result["tool_calls"]), 2)
+        self.assertEqual(llm.token_limits[-1], 128)
+        self.assertEqual(
+            result["run"]["execution_budget"],  # type: ignore[index]
+            {"max_steps": 2, "max_completion_tokens": 128},
+        )
 
 
 if __name__ == "__main__":

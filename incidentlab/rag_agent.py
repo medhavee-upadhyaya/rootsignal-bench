@@ -34,12 +34,14 @@ class GroundedAgent:
         max_steps: int = 4,
         collection_ids: list[str] | None = None,
         on_event: Callable[[dict[str, object]], None] | None = None,
+        max_completion_tokens: int = 500,
     ) -> None:
         self.knowledge = knowledge
         self.llm = llm
         self.max_steps = max_steps
         self.collection_ids = collection_ids
         self.on_event = on_event or (lambda event: None)
+        self.max_completion_tokens = max_completion_tokens
 
     def investigate(self, query: str, incident: Incident) -> dict[str, object]:
         evidence: list[dict[str, object]] = []
@@ -86,6 +88,7 @@ class GroundedAgent:
                 "from A to B; if B is smaller it was reduced. Cite deployment changes and runbooks when relevant."
             ),
             user=f"Question: {query}\n\nEvidence:\n{numbered}",
+            max_tokens=self.max_completion_tokens,
         )
         answer, generation = self._parse_or_repair(generation)
         valid_citations = sorted(
@@ -140,6 +143,10 @@ class GroundedAgent:
                 "model_planned_steps": sum(call.decision_source == "model" for call in calls),
                 "stop_reason": stop_reason,
                 "model_requested_stop": stop_reason == "model_finish",
+                "execution_budget": {
+                    "max_steps": self.max_steps,
+                    "max_completion_tokens": self.max_completion_tokens,
+                },
             },
             "limitations": limitations,
         }
@@ -200,7 +207,7 @@ class GroundedAgent:
             repaired = self.llm.generate_json(
                 "Return valid compact JSON only. Do not add markdown.",
                 "Repair this object without changing its meaning: " + generation.content[:3000],
-                max_tokens=350,
+                max_tokens=min(350, self.max_completion_tokens),
             )
             combined = Generation(
                 repaired.content,

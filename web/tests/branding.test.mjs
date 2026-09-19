@@ -168,6 +168,19 @@ test("renders real streamed agent progress", async () => {
   assert.match(route, /new Response\(response\.body/);
 });
 
+test("exposes bounded per-run execution controls", async () => {
+  const [page, route] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /EXECUTION BUDGET/);
+  assert.match(page, /maxSteps/);
+  assert.match(page, /maxCompletionTokens/);
+  assert.match(page, /saved with every run/);
+  assert.match(route, /max_steps: body\.max_steps/);
+  assert.match(route, /max_completion_tokens: body\.max_completion_tokens/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

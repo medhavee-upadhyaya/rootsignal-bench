@@ -54,7 +54,7 @@ type RunSummary = {
 type StoredRun = RunSummary & {
   query: string;
   result: Investigation;
-  metadata: { api_version: string; oracle_backed: boolean; retrieval_engine: string; request_id: string; knowledge_collections?: string[] };
+  metadata: { api_version: string; oracle_backed: boolean; retrieval_engine: string; request_id: string; knowledge_collections?: string[]; execution_budget?: { max_steps: number; max_completion_tokens: number } };
 };
 type Scorecard = {
   root_cause: number;
@@ -138,6 +138,8 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState("");
   const [progress, setProgress] = useState("Idle");
+  const [maxSteps, setMaxSteps] = useState(4);
+  const [maxCompletionTokens, setMaxCompletionTokens] = useState(500);
   const [activeTab, setActiveTab] = useState<"evidence" | "remediation">("evidence");
   const [source, setSource] = useState("runbook/custom-operations");
   const [knowledgeText, setKnowledgeText] = useState("");
@@ -401,6 +403,8 @@ export default function Home() {
           mode,
           stream: mode === "model",
           collection_ids: verifiedCollectionIds,
+          max_steps: maxSteps,
+          max_completion_tokens: maxCompletionTokens,
         }),
       });
       let payload: Investigation;
@@ -695,6 +699,12 @@ export default function Home() {
           <span className="environment"><i /> Local environment</span>
           <a className="github-button" href="https://github.com/medhavee-upadhyaya/rootsignal-bench" target="_blank" rel="noreferrer">GitHub ↗</a>
         </div>
+        <div className="execution-budget" aria-label="Execution budget">
+          <span>EXECUTION BUDGET</span>
+          <label>MAX TOOL STEPS<select value={maxSteps} onChange={(event) => setMaxSteps(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label>MAX COMPLETION TOKENS<select value={maxCompletionTokens} onChange={(event) => setMaxCompletionTokens(Number(event.target.value))}>{[128, 256, 500, 750, 1000].map((value) => <option key={value}>{value}</option>)}</select></label>
+          <small>Validated server-side and saved with every run</small>
+        </div>
       </header>
 
       <section className="hero" id="top">
@@ -921,6 +931,7 @@ export default function Home() {
           <div><span>RUN ID</span><code>{activeRun.run_id}</code></div>
           <div><span>INCIDENT SHA-256</span><code title={activeRun.fixture_sha256}>{activeRun.fixture_sha256.slice(0, 16)}…</code></div>
           <div><span>API / RETRIEVAL</span><code>{activeRun.metadata.api_version} · {activeRun.metadata.retrieval_engine} · {activeRun.metadata.knowledge_collections?.length ?? 0} scopes</code></div>
+          <div><span>EXECUTION BUDGET</span><code>{activeRun.metadata.execution_budget?.max_steps ?? "—"} steps · {activeRun.metadata.execution_budget?.max_completion_tokens ?? "—"} tokens</code></div>
           <div><span>REQUEST ID</span><code>{activeRun.metadata.request_id}</code></div>
           <a className="evidence-export" href={`/api/export?run_id=${encodeURIComponent(activeRun.run_id)}`}><span>PORTABLE EVIDENCE</span><strong>Export JSON ↓</strong></a>
         </section>

@@ -147,6 +147,8 @@ class InvestigationRequest(BaseModel):
     collection_ids: list[str] = Field(
         default_factory=lambda: ["incident-runbooks"], min_length=1, max_length=10
     )
+    max_steps: int = Field(default=4, ge=1, le=4)
+    max_completion_tokens: int = Field(default=500, ge=64, le=1000)
 
 
 class KnowledgeRequest(BaseModel):
@@ -246,6 +248,8 @@ def _record_result(
     latency_ms: float,
     request_id_value: str,
     collection_ids: list[str],
+    max_steps: int,
+    max_completion_tokens: int,
 ) -> dict[str, object]:
     path = _incident_path(incident.incident_id)
     fixture_sha256 = (
@@ -267,6 +271,10 @@ def _record_result(
         "completion_tokens": int(run_metadata.get("completion_tokens", 0)),
         "retrieved_chunks": int(run_metadata.get("retrieved_chunks", 0)),
         "knowledge_collections": collection_ids,
+        "execution_budget": {
+            "max_steps": max_steps,
+            "max_completion_tokens": max_completion_tokens,
+        },
     }
     reference = RUNS.save(
         incident_id=incident.incident_id,
@@ -524,7 +532,11 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
                 {"rootsignal.incident_id": incident.incident_id, "rootsignal.model": LLM.model},
             ):
                 result = GroundedAgent(
-                    KNOWLEDGE, LLM, collection_ids=collections
+                    KNOWLEDGE,
+                    LLM,
+                    max_steps=payload.max_steps,
+                    collection_ids=collections,
+                    max_completion_tokens=payload.max_completion_tokens,
                 ).investigate(query, incident)
             run = result.get("run", {})
             if isinstance(run, dict):
@@ -544,6 +556,8 @@ def investigate(payload: InvestigationRequest, request: Request) -> dict[str, ob
                 latency_ms=(time.perf_counter() - started) * 1000,
                 request_id_value=getattr(request.state, "request_id", "unknown"),
                 collection_ids=collections,
+                max_steps=payload.max_steps,
+                max_completion_tokens=payload.max_completion_tokens,
             )
         except Exception as exc:
             LOGGER.warning(
@@ -576,7 +590,12 @@ def stream_investigation(payload: InvestigationRequest, request: Request) -> Str
                     {"rootsignal.incident_id": incident.incident_id, "rootsignal.model": LLM.model},
                 ):
                     result = GroundedAgent(
-                        KNOWLEDGE, LLM, collection_ids=collections, on_event=publish
+                        KNOWLEDGE,
+                        LLM,
+                        max_steps=payload.max_steps,
+                        collection_ids=collections,
+                        on_event=publish,
+                        max_completion_tokens=payload.max_completion_tokens,
                     ).investigate(query_text, incident)
                 run = result.get("run", {})
                 if isinstance(run, dict):
@@ -589,6 +608,8 @@ def stream_investigation(payload: InvestigationRequest, request: Request) -> Str
                     latency_ms=(time.perf_counter() - started) * 1000,
                     request_id_value=request_id_value,
                     collection_ids=collections,
+                    max_steps=payload.max_steps,
+                    max_completion_tokens=payload.max_completion_tokens,
                 )
                 log_event(
                     LOGGER,
@@ -627,7 +648,7 @@ def deterministic_baseline(payload: InvestigationRequest, request: Request) -> d
     _validated_collections(payload.collection_ids)
     query = _validated_query(payload.query, incident)
     started = time.perf_counter()
-    result = Investigator().investigate(incident).as_dict()
+    result = Investigator(max_tool_calls=payload.max_steps).investigate(incident).as_dict()
     return _record_result(
         incident=incident,
         mode="baseline",
@@ -636,4 +657,6 @@ def deterministic_baseline(payload: InvestigationRequest, request: Request) -> d
         latency_ms=(time.perf_counter() - started) * 1000,
         request_id_value=getattr(request.state, "request_id", "unknown"),
         collection_ids=payload.collection_ids,
+        max_steps=payload.max_steps,
+        max_completion_tokens=payload.max_completion_tokens,
     )

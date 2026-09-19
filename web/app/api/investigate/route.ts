@@ -15,6 +15,8 @@ export async function POST(request: Request) {
         incident_id: body.incident_id,
         query: body.query,
         collection_ids: body.collection_ids,
+        max_steps: body.max_steps,
+        max_completion_tokens: body.max_completion_tokens,
       }),
     });
     return new Response(response.body, {

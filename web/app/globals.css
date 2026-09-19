@@ -161,6 +161,11 @@ textarea:read-only { color: #dbe2df; }
 .investigation-progress { display: flex; align-items: center; gap: 9px; margin-top: 11px; color: var(--mint); font: 9px monospace; }
 .investigation-progress i { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); animation: pulse 1s ease-in-out infinite alternate; }
 @keyframes pulse { to { opacity: .3; } }
+.execution-budget { display: flex; align-items: center; gap: 14px; margin-top: 11px; padding-top: 11px; border-top: 1px solid #394743; color: #9bacaa; font: 8px monospace; }
+.execution-budget > span { color: var(--mint); font-weight: 700; letter-spacing: .1em; }
+.execution-budget label { display: flex; align-items: center; gap: 6px; }
+.execution-budget select { border: 1px solid #52605d; background: #202d2b; color: white; padding: 4px 6px; font: 8px monospace; }
+.execution-budget small { margin-left: auto; color: #75837f; }
 .workspace-grid { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: .8fr 1.2fr; gap: 22px; }
 .workspace-empty { max-width: 1240px; min-height: 260px; margin: 0 auto; border: 1px dashed #bfc4b9; display: flex; align-items: center; justify-content: center; gap: 18px; background: rgba(252,251,247,.45); }
 .workspace-empty > span { width: 38px; height: 38px; display: grid; place-items: center; background: var(--green); color: white; font: 700 10px monospace; }
@@ -168,7 +173,7 @@ textarea:read-only { color: #dbe2df; }
 .workspace-empty p:first-child { margin: 0 0 6px; color: var(--green); font: 700 8px monospace; letter-spacing: .14em; }
 .workspace-empty h2 { margin: 0 0 8px; font-size: 21px; letter-spacing: -.03em; }
 .workspace-empty p:last-child { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.run-manifest { max-width: 1240px; margin: 12px auto 0; display: grid; grid-template-columns: 1.25fr 1fr 1fr 1.25fr auto; border: 1px solid var(--line); background: #eceee6; }
+.run-manifest { max-width: 1240px; margin: 12px auto 0; display: grid; grid-template-columns: 1.15fr 1fr 1fr 1fr 1.15fr auto; border: 1px solid var(--line); background: #eceee6; }
 .run-manifest > div { min-width: 0; padding: 10px 12px; border-right: 1px solid var(--line); }
 .run-manifest > div:last-child { border: 0; }
 .run-manifest span { display: block; margin-bottom: 4px; color: var(--muted); font: 700 7px monospace; letter-spacing: .1em; }

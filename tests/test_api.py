@@ -313,6 +313,33 @@ class APITests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "validation_error")
         self.assertNotIn("input", payload)
 
+    def test_execution_budgets_are_bounded_and_persisted(self) -> None:
+        for field, value in (("max_steps", 5), ("max_completion_tokens", 1001)):
+            status, _, payload = asgi_request(
+                "POST",
+                "/v1/baselines/deterministic",
+                body={"incident_id": "checkout-latency-001", field: value},
+            )
+            self.assertEqual(status, 422)
+            self.assertEqual(payload["error"]["code"], "validation_error")
+
+        status, _, result = asgi_request(
+            "POST",
+            "/v1/baselines/deterministic",
+            body={
+                "incident_id": "checkout-latency-001",
+                "max_steps": 2,
+                "max_completion_tokens": 128,
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result["tool_calls"]), 2)
+        _, _, stored = asgi_request("GET", f"/v1/runs/{result['record']['run_id']}")
+        self.assertEqual(
+            stored["metadata"]["execution_budget"],
+            {"max_steps": 2, "max_completion_tokens": 128},
+        )
+
     def test_request_id_rejects_header_injection(self) -> None:
         generated = request_id("unsafe value")
         self.assertRegex(generated, r"^[a-f0-9]{32}$")

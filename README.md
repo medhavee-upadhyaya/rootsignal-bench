@@ -53,6 +53,8 @@ Tool use is adaptive within a hard step budget. The planner may choose `finish` 
 
 Model investigations also expose an NDJSON progress stream. The workspace renders real planner, completed-tool, adaptive-stop, synthesis, and final-result events while preserving the same immutable result record as the regular JSON endpoint.
 
+Every investigation has server-validated execution budgets: one to four tool steps and a 64 to 1,000 token limit for synthesis or repair calls. The selected limits apply equally to JSON and streamed requests and are persisted in run metadata and portable exports.
+
 ## Five-minute quickstart
 
 ```bash
