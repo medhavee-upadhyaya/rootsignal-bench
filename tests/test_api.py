@@ -50,6 +50,43 @@ class APITests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(run_id, [run["run_id"] for run in history["runs"]])
 
+    def test_human_review_is_appended_and_exported_without_mutating_result(self) -> None:
+        _, _, result = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}
+        )
+        run_id = result["record"]["run_id"]
+        root_cause = result["root_cause"]
+        status, _, review = asgi_request(
+            "POST",
+            f"/v1/runs/{run_id}/reviews",
+            body={"verdict": "needs_investigation", "note": "Confirm against database events"},
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(review["verdict"], "needs_investigation")
+
+        _, _, stored = asgi_request("GET", f"/v1/runs/{run_id}")
+        self.assertEqual(stored["result"]["root_cause"], root_cause)
+        self.assertEqual(stored["reviews"], [review])
+        _, _, bundle = asgi_request("GET", f"/v1/runs/{run_id}/export")
+        self.assertEqual(bundle["run"]["reviews"], [review])
+        self.assertTrue(verify_evidence_bundle(bundle))
+
+    def test_human_review_rejects_credentials_before_persistence(self) -> None:
+        _, _, result = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}
+        )
+        run_id = result["record"]["run_id"]
+        credential = "ghp_" + "abcdefghijklmnopqrstuvwxyz1234567890"
+        status, _, payload = asgi_request(
+            "POST",
+            f"/v1/runs/{run_id}/reviews",
+            body={"verdict": "rejected", "note": f"Leaked {credential}"},
+        )
+        self.assertEqual(status, 422)
+        self.assertNotIn(credential, json.dumps(payload))
+        _, _, stored = asgi_request("GET", f"/v1/runs/{run_id}")
+        self.assertEqual(stored["reviews"], [])
+
     def test_run_export_is_downloadable_verifiable_and_oracle_free(self) -> None:
         _, _, reference = asgi_request(
             "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}

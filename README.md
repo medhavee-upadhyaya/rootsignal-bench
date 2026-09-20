@@ -55,6 +55,8 @@ Model investigations also expose an NDJSON progress stream. The workspace render
 
 Every investigation has server-validated execution budgets: one to four tool steps and a 64 to 1,000 token limit for synthesis or repair calls. The selected limits apply equally to JSON and streamed requests and are persisted in run metadata and portable exports.
 
+Engineers can append an `accepted`, `rejected`, or `needs_investigation` review with an optional rationale. Reviews never mutate the original run, reject credential-like notes before persistence, and travel with tamper-evident evidence exports.
+
 ## Five-minute quickstart
 
 ```bash

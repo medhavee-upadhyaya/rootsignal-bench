@@ -55,6 +55,7 @@ type StoredRun = RunSummary & {
   query: string;
   result: Investigation;
   metadata: { api_version: string; oracle_backed: boolean; retrieval_engine: string; request_id: string; knowledge_collections?: string[]; execution_budget?: { max_steps: number; max_completion_tokens: number } };
+  reviews: Array<{ review_id: string; created_at: string; verdict: "accepted" | "rejected" | "needs_investigation"; note: string }>;
 };
 type Scorecard = {
   root_cause: number;
@@ -172,6 +173,8 @@ export default function Home() {
   const [creatorPurpose, setCreatorPurpose] = useState<"live" | "evaluation">("live");
   const [creatorStatus, setCreatorStatus] = useState("");
   const [archiveConfirmId, setArchiveConfirmId] = useState("");
+  const [reviewNote, setReviewNote] = useState("");
+  const [reviewStatus, setReviewStatus] = useState("");
   const [jsonFixture, setJsonFixture] = useState("");
   const [incidentDraft, setIncidentDraft] = useState({
     id: "", title: "", summary: "", failureClass: "custom-incident", difficulty: "medium",
@@ -657,6 +660,25 @@ export default function Home() {
     }
   }
 
+  async function submitReview(verdict: "accepted" | "rejected" | "needs_investigation") {
+    if (!activeRun) return;
+    setReviewStatus("Saving review…");
+    try {
+      const response = await fetch(`/api/runs?run_id=${encodeURIComponent(activeRun.run_id)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ verdict, note: reviewNote }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || "Review failed");
+      setReviewNote("");
+      setReviewStatus("Review recorded");
+      await loadRun(activeRun.run_id, false);
+    } catch (error) {
+      setReviewStatus(error instanceof Error ? error.message : "Review failed");
+    }
+  }
+
   async function indexKnowledge() {
     if (knowledgeText.trim().length < 20) {
       setIndexStatus("Add at least 20 characters.");
@@ -923,6 +945,15 @@ export default function Home() {
             <h2>{selectedIncident ? selectedIncident.title : "Connect the incident catalog"}</h2>
             <p>{selectedIncident ? (mode === "baseline" ? "Run the control to verify tools, evidence, and the evaluation pipeline." : "Run the connected model to inspect its independent tool trace, citations, diagnosis, and remediation.") : "RootSignal needs the API to load replayable incidents."}</p>
           </div>
+        </section>
+      )}
+
+      {activeRun && (
+        <section className="human-review" aria-label="Human review">
+          <div><span>HUMAN OVERSIGHT</span><strong>Review this diagnosis</strong><small>Reviews are append-only and included in exported evidence.</small></div>
+          <textarea rows={2} maxLength={1000} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Optional rationale, follow-up, or correction…" />
+          <div className="review-actions"><button onClick={() => submitReview("accepted")}>Accept</button><button onClick={() => submitReview("needs_investigation")}>Needs investigation</button><button className="reject" onClick={() => submitReview("rejected")}>Reject</button><span>{reviewStatus}</span></div>
+          {activeRun.reviews.length > 0 && <ol>{activeRun.reviews.map((review) => <li key={review.review_id}><strong>{review.verdict.replaceAll("_", " ")}</strong><time>{new Date(review.created_at).toLocaleString()}</time>{review.note && <p>{review.note}</p>}</li>)}</ol>}
         </section>
       )}
 

@@ -8,7 +8,7 @@ import queue
 import threading
 import time
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 try:
     from fastapi import FastAPI, HTTPException, Request, Response
@@ -57,6 +57,7 @@ RATE_LIMITED_PATHS = {
     "/v1/comparisons",
     "/v1/incidents",
     "/v1/evaluation-suites",
+    "/v1/runs",
 }
 
 
@@ -173,6 +174,11 @@ RunId = Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
 
 class EvaluationSuiteRequest(BaseModel):
     run_ids: list[RunId] = Field(min_length=2, max_length=50)
+
+
+class RunReviewRequest(BaseModel):
+    verdict: Literal["accepted", "rejected", "needs_investigation"]
+    note: str = Field(default="", max_length=1000)
 
 
 def _incident_path(incident_id: str) -> Path | None:
@@ -429,6 +435,18 @@ def get_run(run_id: str) -> dict[str, object]:
     if run is None:
         raise HTTPException(status_code=404, detail="Unknown run")
     return run
+
+
+@app.post("/v1/runs/{run_id}/reviews", status_code=201)
+def review_run(run_id: RunId, payload: RunReviewRequest) -> dict[str, str]:
+    note = payload.note.strip()
+    try:
+        reject_secrets(note)
+        return RUNS.add_review(run_id, payload.verdict, note)
+    except SensitiveContentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/v1/runs/{run_id}/export")

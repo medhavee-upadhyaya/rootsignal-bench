@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 ExecutionMode = Literal["baseline", "model"]
+ReviewVerdict = Literal["accepted", "rejected", "needs_investigation"]
 
 
 class RunStore:
@@ -53,6 +54,16 @@ class RunStore:
                     ON experiment_runs(created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_experiment_runs_incident
                     ON experiment_runs(incident_id, created_at DESC);
+                CREATE TABLE IF NOT EXISTS run_reviews (
+                    review_id TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    verdict TEXT NOT NULL CHECK(verdict IN ('accepted', 'rejected', 'needs_investigation')),
+                    note TEXT NOT NULL,
+                    FOREIGN KEY(run_id) REFERENCES experiment_runs(run_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_run_reviews_run
+                    ON run_reviews(run_id, created_at, review_id);
                 """
             )
 
@@ -136,7 +147,40 @@ class RunStore:
         record["query"] = row["query"]
         record["result"] = json.loads(row["result_json"])
         record["metadata"] = json.loads(row["metadata_json"])
+        record["reviews"] = self.reviews(run_id)
         return record
+
+    def add_review(self, run_id: str, verdict: ReviewVerdict, note: str = "") -> dict[str, str]:
+        review_id = uuid.uuid4().hex
+        created_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with self._connect() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM experiment_runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if exists is None:
+                raise ValueError("Unknown run")
+            connection.execute(
+                "INSERT INTO run_reviews VALUES (?, ?, ?, ?, ?)",
+                (review_id, run_id, created_at, verdict, note),
+            )
+        return {
+            "review_id": review_id,
+            "run_id": run_id,
+            "created_at": created_at,
+            "verdict": verdict,
+            "note": note,
+        }
+
+    def reviews(self, run_id: str) -> list[dict[str, str]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT review_id, run_id, created_at, verdict, note FROM run_reviews
+                WHERE run_id = ? ORDER BY created_at, rowid
+                """,
+                (run_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     @staticmethod
     def _summary(row: sqlite3.Row) -> dict[str, Any]:

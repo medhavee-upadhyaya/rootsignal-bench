@@ -181,6 +181,18 @@ test("exposes bounded per-run execution controls", async () => {
   assert.match(route, /max_completion_tokens: body\.max_completion_tokens/);
 });
 
+test("records append-only human review on saved runs", async () => {
+  const [page, route] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/runs/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /HUMAN OVERSIGHT/);
+  assert.match(page, /Needs investigation/);
+  assert.match(page, /Reviews are append-only/);
+  assert.match(route, /\/reviews/);
+  assert.match(route, /export async function POST/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

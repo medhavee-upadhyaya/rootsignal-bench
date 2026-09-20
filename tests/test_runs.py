@@ -49,6 +49,23 @@ class RunStoreTests(unittest.TestCase):
             self.assertEqual(len(store.list(limit=2)), 2)
             self.assertEqual(len(store.list(limit=1000)), 3)
 
+    def test_reviews_are_append_only_and_do_not_mutate_run_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = RunStore(Path(directory) / "runs.db")
+            run = store.save(
+                incident_id="checkout-latency-001", incident_title="Checkout latency",
+                mode="model", model="test-model", query="Investigate checkout",
+                fixture_sha256="d" * 64, result={"root_cause": "Pool exhaustion"}, metadata={},
+            )
+            first = store.add_review(run["run_id"], "needs_investigation", "Check deployment timing")
+            second = store.add_review(run["run_id"], "accepted", "Confirmed by database team")
+            record = store.get(run["run_id"])
+            assert record is not None
+            self.assertEqual([item["review_id"] for item in record["reviews"]], [first["review_id"], second["review_id"]])
+            self.assertEqual(record["result"]["root_cause"], "Pool exhaustion")
+            with self.assertRaisesRegex(ValueError, "Unknown run"):
+                store.add_review("0" * 32, "rejected")
+
     def test_cursor_pagination_is_stable_and_has_no_duplicates(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = RunStore(Path(directory) / "runs.db")
