@@ -28,6 +28,10 @@ type IncidentSummary = {
 };
 
 type IncidentCatalog = { schema_version: string; count: number; incidents: IncidentSummary[] };
+type IncidentDetail = IncidentSummary & {
+  telemetry: { metrics: Record<string, unknown>; logs: string[]; deployments: string[] };
+  runbooks: Array<{ id: string; title: string; content: string }>;
+};
 type KnowledgeCollection = { id: string; name: string; description: string; documents: number };
 type ExecutionMode = "baseline" | "model";
 type SystemStatus = {
@@ -173,6 +177,9 @@ export default function Home() {
   const [creatorPurpose, setCreatorPurpose] = useState<"live" | "evaluation">("live");
   const [creatorStatus, setCreatorStatus] = useState("");
   const [archiveConfirmId, setArchiveConfirmId] = useState("");
+  const [incidentDetail, setIncidentDetail] = useState<IncidentDetail | null>(null);
+  const [showObservations, setShowObservations] = useState(false);
+  const [observationError, setObservationError] = useState("");
   const [reviewNote, setReviewNote] = useState("");
   const [reviewStatus, setReviewStatus] = useState("");
   const [jsonFixture, setJsonFixture] = useState("");
@@ -480,10 +487,35 @@ export default function Home() {
     setActiveRunId(null);
     setActiveRun(null);
     setRunError("");
+    setIncidentDetail(null);
+    setShowObservations(false);
+    setObservationError("");
     setGuidedControlRunId(null);
     setGuidedAgentRunId(null);
     setGuidedExported(false);
     setComparison(null);
+  }
+
+  async function toggleIncidentObservations() {
+    if (showObservations) {
+      setShowObservations(false);
+      return;
+    }
+    if (!selectedIncident) return;
+    setObservationError("");
+    try {
+      let detail = incidentDetail;
+      if (!detail || detail.id !== selectedIncident.id) {
+        const response = await fetch(`/api/incidents?incident_id=${encodeURIComponent(selectedIncident.id)}`, { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error?.message || "Incident observations unavailable");
+        detail = payload;
+        setIncidentDetail(detail);
+      }
+      setShowObservations(true);
+    } catch (error) {
+      setObservationError(error instanceof Error ? error.message : "Incident observations unavailable");
+    }
   }
 
   function selectMode(nextMode: ExecutionMode) {
@@ -721,12 +753,6 @@ export default function Home() {
           <span className="environment"><i /> Local environment</span>
           <a className="github-button" href="https://github.com/medhavee-upadhyaya/rootsignal-bench" target="_blank" rel="noreferrer">GitHub ↗</a>
         </div>
-        <div className="execution-budget" aria-label="Execution budget">
-          <span>EXECUTION BUDGET</span>
-          <label>MAX TOOL STEPS<select value={maxSteps} onChange={(event) => setMaxSteps(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label>MAX COMPLETION TOKENS<select value={maxCompletionTokens} onChange={(event) => setMaxCompletionTokens(Number(event.target.value))}>{[128, 256, 500, 750, 1000].map((value) => <option key={value}>{value}</option>)}</select></label>
-          <small>Validated server-side and saved with every run</small>
-        </div>
       </header>
 
       <section className="hero" id="top">
@@ -818,10 +844,19 @@ export default function Home() {
               <span>{selectedIncident.metadata.catalog_source}</span>
               <span>{selectedIncident.metadata.evaluable === false ? "live · ungraded" : "evaluation · scoreable"}</span>
               <span>{Object.values(selectedIncident.observation_counts).reduce((sum, count) => sum + count, 0)} observations</span>
+              <button onClick={toggleIncidentObservations}>{showObservations ? "Hide input" : "Inspect input"}</button>
               {selectedIncident.metadata.catalog_source === "custom" && <button className={archiveConfirmId === selectedIncident.id ? "confirm" : ""} onClick={archiveSelectedIncident} onBlur={() => setArchiveConfirmId("")}>{archiveConfirmId === selectedIncident.id ? "Confirm archive" : "Archive"}</button>}
             </div>
           )}
         </div>
+        {observationError && <p className="observation-error" role="alert">{observationError}</p>}
+        {showObservations && incidentDetail && <section className="observation-inspector" aria-label="Agent input observations">
+          <div><span>METRICS · {Object.keys(incidentDetail.telemetry.metrics).length}</span>{Object.entries(incidentDetail.telemetry.metrics).map(([name, value]) => <p key={name}><strong>{name}</strong><code>{typeof value === "string" ? value : JSON.stringify(value)}</code></p>)}</div>
+          <div><span>LOGS · {incidentDetail.telemetry.logs.length}</span>{incidentDetail.telemetry.logs.map((item, index) => <p key={`${index}-${item}`}>{item}</p>)}</div>
+          <div><span>DEPLOYMENTS · {incidentDetail.telemetry.deployments.length}</span>{incidentDetail.telemetry.deployments.map((item, index) => <p key={`${index}-${item}`}>{item}</p>)}</div>
+          <div><span>INCIDENT RUNBOOKS · {incidentDetail.runbooks.length}</span>{incidentDetail.runbooks.length ? incidentDetail.runbooks.map((item) => <p key={item.id}><strong>{item.title}</strong>{item.content}</p>) : <p>No incident-specific runbook. Selected knowledge collections remain available.</p>}</div>
+          <footer>Read-only agent input · private evaluation oracle excluded by the API</footer>
+        </section>}
         <div className="mode-picker" role="radiogroup" aria-label="Execution mode">
           <button
             className={mode === "baseline" ? "active" : ""}
@@ -864,6 +899,12 @@ export default function Home() {
             <div className="model-setup-footer"><span>Already running another OpenAI-compatible server? Replace the URL and model values in step 3.</span><button onClick={refreshSystem} disabled={systemLoading}>{systemLoading ? "Checking connection…" : "Verify connection →"}</button></div>
           </div>
         )}
+        <div className="execution-budget" aria-label="Execution budget">
+          <span>EXECUTION BUDGET</span>
+          <label>MAX TOOL STEPS<select value={maxSteps} onChange={(event) => setMaxSteps(Number(event.target.value))}>{[1, 2, 3, 4].map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label>MAX COMPLETION TOKENS<select value={maxCompletionTokens} onChange={(event) => setMaxCompletionTokens(Number(event.target.value))}>{[128, 256, 500, 750, 1000].map((value) => <option key={value}>{value}</option>)}</select></label>
+          <small>Validated server-side and saved with every run</small>
+        </div>
         <div className="command-row">
           <div className="investigation-intent">
             <label htmlFor="investigation-query">INVESTIGATION QUESTION</label>

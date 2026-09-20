@@ -95,6 +95,8 @@ The guided builder can populate a live incident from a local JSON telemetry bund
 
 Custom incidents can be archived from the workspace with an explicit confirmation. Archival removes them from the active catalog without deleting their immutable fixture snapshot, so existing run history and evidence exports remain reproducible. Built-in benchmark incidents cannot be archived.
 
+Before execution, **Inspect input** shows the exact read-only metrics, logs, deployments, and incident runbooks available to tools. This detail endpoint deliberately excludes the private evaluation oracle, and the UI states that boundary next to the observations.
+
 Run an independent model investigation through the API:
 
 ```bash

@@ -193,6 +193,17 @@ test("records append-only human review on saved runs", async () => {
   assert.match(route, /export async function POST/);
 });
 
+test("lets users inspect the exact oracle-free agent input", async () => {
+  const [page, route] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/incidents/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /Inspect input/);
+  assert.match(page, /Agent input observations/);
+  assert.match(page, /private evaluation oracle excluded by the API/);
+  assert.match(route, /\/v1\/incidents\/\$\{encodeURIComponent\(incidentId\)\}/);
+});
+
 test("scopes persistent knowledge collections to investigations", async () => {
   const [page, collectionsRoute, investigationRoute] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

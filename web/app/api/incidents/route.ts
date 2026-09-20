@@ -1,7 +1,11 @@
-export async function GET() {
+export async function GET(request: Request) {
   const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
+  const incidentId = new URL(request.url).searchParams.get("incident_id");
+  const endpoint = incidentId
+    ? `/v1/incidents/${encodeURIComponent(incidentId)}`
+    : "/v1/incidents";
   try {
-    const response = await fetch(`${apiBase}/v1/incidents`, { cache: "no-store" });
+    const response = await fetch(`${apiBase}${endpoint}`, { cache: "no-store" });
     return new Response(await response.text(), {
       status: response.status,
       headers: { "content-type": "application/json" },
