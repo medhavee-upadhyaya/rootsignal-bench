@@ -33,7 +33,11 @@ def _result(payload: dict[str, Any]) -> InvestigationResult:
     )
 
 
-def build_suite(entries: list[tuple[Incident, dict[str, Any]]]) -> dict[str, Any]:
+def build_suite(
+    entries: list[tuple[Incident, dict[str, Any]]],
+    *,
+    selection: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if len(entries) < 2:
         raise ValueError("Evaluation suite requires at least two model runs")
     incident_ids = [incident.incident_id for incident, _ in entries]
@@ -66,6 +70,8 @@ def build_suite(entries: list[tuple[Incident, dict[str, Any]]]) -> dict[str, Any
         "confidence_intervals": intervals,
         "statistics": {"method": "nonparametric bootstrap over incidents", "seed": 17, "bootstrap_samples": 2_000},
     }
+    if selection is not None:
+        artifact["selection"] = selection
     return {
         **artifact,
         "integrity": {

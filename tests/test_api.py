@@ -2,21 +2,56 @@ from __future__ import annotations
 
 import asyncio
 import json
+import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import urlsplit
 
 try:
     from incidentlab.api import InvestigationRequest, app
+    from incidentlab.agent import Investigator
     from incidentlab.evidence_bundle import verify_evidence_bundle
+    from incidentlab.fixtures import load_incident
     from incidentlab.http import RateLimiter, request_id
+    from incidentlab.runs import RunStore
 except (ImportError, RuntimeError):
     InvestigationRequest = None  # type: ignore[assignment,misc]
 
 
 @unittest.skipIf(InvestigationRequest is None, "API dependencies are not installed")
 class APITests(unittest.TestCase):
+    def test_complete_suite_selects_latest_model_run_per_evaluable_incident(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = RunStore(Path(directory) / "runs.db")
+            selected_ids = []
+            for fixture_path in (
+                "fixtures/incidents/checkout_latency.yaml",
+                "fixtures/incidents/billing_clock.json",
+            ):
+                incident = load_incident(fixture_path)
+                result = Investigator().investigate(incident).as_dict()
+                store.save(
+                    incident_id=incident.incident_id, incident_title=incident.title,
+                    mode="model", model="older-model", query=incident.summary,
+                    fixture_sha256="a" * 64, result=result, metadata={},
+                )
+                selected_ids.append(store.save(
+                    incident_id=incident.incident_id, incident_title=incident.title,
+                    mode="model", model="candidate-model", query=incident.summary,
+                    fixture_sha256="a" * 64, result=result, metadata={},
+                )["run_id"])
+
+            with patch("incidentlab.api.RUNS", store):
+                status, _, report = asgi_request("GET", "/v1/evaluation-suites/latest")
+
+            self.assertEqual(status, 200)
+            self.assertEqual(report["fixture_count"], 2)
+            self.assertEqual(report["selection"]["strategy"], "latest_model_run_per_incident")
+            self.assertEqual(set(report["selection"]["included_run_ids"]), set(selected_ids))
+            self.assertTrue(report["integrity"]["digest"])
+
     def test_investigation_resolves_declared_fixture_id(self) -> None:
         status, _, response = asgi_request(
             "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}

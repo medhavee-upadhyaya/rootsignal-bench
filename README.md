@@ -59,6 +59,8 @@ Engineers can append an `accepted`, `rejected`, or `needs_investigation` review 
 
 Run history supports server-side filters for incident, execution mode, and review verdict. Filters compose with the stable cursor, so large experiment histories remain deterministic without loading every run into the browser.
 
+Suite evaluation selects the latest model run per incident from the complete server-side history. Its tamper-evident report records included run IDs and any non-evaluable exclusions, so pagination cannot silently change benchmark coverage.
+
 ## Five-minute quickstart
 
 ```bash

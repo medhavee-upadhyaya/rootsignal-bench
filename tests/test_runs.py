@@ -108,6 +108,36 @@ class RunStoreTests(unittest.TestCase):
             observed = [first[0]["run_id"], second[0]["run_id"]]
             self.assertEqual(set(observed), set(matching))
 
+    def test_latest_model_runs_selects_one_per_incident_from_complete_store(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = RunStore(Path(directory) / "runs.db")
+            older = store.save(
+                incident_id="checkout", incident_title="Checkout", mode="model",
+                model="old-model", query="Investigate", fixture_sha256="a" * 64,
+                result={"root_cause": "old"}, metadata={},
+            )
+            store.save(
+                incident_id="checkout", incident_title="Checkout", mode="baseline",
+                model="control", query="Investigate", fixture_sha256="a" * 64,
+                result={}, metadata={},
+            )
+            newer = store.save(
+                incident_id="checkout", incident_title="Checkout", mode="model",
+                model="new-model", query="Investigate", fixture_sha256="a" * 64,
+                result={"root_cause": "new"}, metadata={},
+            )
+            billing = store.save(
+                incident_id="billing", incident_title="Billing", mode="model",
+                model="new-model", query="Investigate", fixture_sha256="b" * 64,
+                result={"root_cause": "billing"}, metadata={},
+            )
+
+            selected = store.latest_model_runs_by_incident()
+            selected_ids = {run["run_id"] for run in selected}
+            self.assertEqual(selected_ids, {newer["run_id"], billing["run_id"]})
+            self.assertNotIn(older["run_id"], selected_ids)
+            self.assertTrue(all(run["mode"] == "model" for run in selected))
+
 
 if __name__ == "__main__":
     unittest.main()

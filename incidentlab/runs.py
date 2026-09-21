@@ -162,6 +162,30 @@ class RunStore:
         record["reviews"] = self.reviews(run_id)
         return record
 
+    def latest_model_runs_by_incident(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Return the newest model run for each incident across the complete store."""
+        safe_limit = min(max(limit, 1), 50)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT run_id FROM (
+                    SELECT run_id, created_at, rowid AS run_rowid,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY incident_id
+                               ORDER BY created_at DESC, rowid DESC
+                           ) AS incident_rank
+                    FROM experiment_runs
+                    WHERE mode = 'model'
+                )
+                WHERE incident_rank = 1
+                ORDER BY created_at DESC, run_rowid DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        records = [self.get(str(row["run_id"])) for row in rows]
+        return [record for record in records if record is not None]
+
     def add_review(self, run_id: str, verdict: ReviewVerdict, note: str = "") -> dict[str, str]:
         review_id = uuid.uuid4().hex
         created_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")

@@ -37,6 +37,25 @@ class EvaluationSuiteTests(unittest.TestCase):
         tampered["aggregate"]["overall"] = 1.0
         self.assertFalse(verify_suite(tampered))
 
+    def test_selection_manifest_is_covered_by_integrity_digest(self) -> None:
+        first = load_incident("fixtures/incidents/checkout_latency.yaml")
+        second = load_incident("fixtures/incidents/billing_clock.json")
+        report = build_suite(
+            [
+                (first, stored_model_run(first, "a" * 32)),
+                (second, stored_model_run(second, "b" * 32)),
+            ],
+            selection={
+                "strategy": "latest_model_run_per_incident",
+                "candidate_count": 2,
+                "included_run_ids": ["a" * 32, "b" * 32],
+                "excluded": [],
+            },
+        )
+        self.assertTrue(verify_suite(report))
+        report["selection"]["included_run_ids"].pop()
+        self.assertFalse(verify_suite(report))
+
     def test_rejects_oracle_controls_and_duplicate_incidents(self) -> None:
         incident = load_incident("fixtures/incidents/checkout_latency.yaml")
         first = stored_model_run(incident, "a" * 32)

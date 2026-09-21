@@ -519,6 +519,31 @@ def evaluate_suite(payload: EvaluationSuiteRequest) -> dict[str, object]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.get("/v1/evaluation-suites/latest")
+def evaluate_latest_suite() -> dict[str, object]:
+    candidates = RUNS.latest_model_runs_by_incident(limit=50)
+    entries = []
+    excluded = []
+    for run in candidates:
+        incident = _incident(str(run["incident_id"]))
+        if incident is None or incident.oracle is None:
+            excluded.append({"run_id": run["run_id"], "incident_id": run["incident_id"], "reason": "not_evaluable"})
+            continue
+        entries.append((incident, run))
+    try:
+        return build_suite(
+            entries,
+            selection={
+                "strategy": "latest_model_run_per_incident",
+                "candidate_count": len(candidates),
+                "included_run_ids": [run["run_id"] for _, run in entries],
+                "excluded": excluded,
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/v1/knowledge")
 def ingest_knowledge(request: KnowledgeRequest) -> dict[str, object]:
     try:

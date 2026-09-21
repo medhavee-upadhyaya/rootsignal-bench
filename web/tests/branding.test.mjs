@@ -110,7 +110,7 @@ test("separates real incident response from oracle-backed evaluation", async () 
   assert.match(page, /draft\.runbook\.trim\(\) \?/);
   assert.match(page, /creatorPurpose === "evaluation"/);
   assert.match(page, /selectedIncident\?\.metadata\.evaluable === false/);
-  assert.match(page, /run\.mode === "model" && run\.evaluable/);
+  assert.match(page, /latest_model_run_per_incident/);
 });
 
 test("lets users define a safe per-run investigation question", async () => {
@@ -250,9 +250,11 @@ test("evaluates saved model runs as a multi-incident suite", async () => {
     readFile(new URL("../app/api/evaluate/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(page, /SUITE EVALUATION/);
-  assert.match(page, /latestModelRuns/);
+  assert.match(page, /complete server-side history/);
+  assert.match(page, /latest_model_run_per_incident/);
   assert.match(page, /95% CI/);
   assert.match(page, /Download verified JSON/);
   assert.match(page, /suiteReport\.integrity\.digest/);
   assert.match(route, /\/v1\/evaluation-suites/);
+  assert.match(route, /latest \? "\/latest"/);
 });
