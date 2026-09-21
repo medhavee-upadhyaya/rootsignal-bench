@@ -414,10 +414,22 @@ def archive_incident(incident_id: str) -> dict[str, str]:
 
 
 @app.get("/v1/runs")
-def list_runs(limit: int = 20, cursor: str | None = None) -> dict[str, object]:
+def list_runs(
+    limit: int = 20,
+    cursor: str | None = None,
+    incident_id: str | None = None,
+    mode: ExecutionMode | None = None,
+    review: Literal["accepted", "rejected", "needs_investigation"] | None = None,
+) -> dict[str, object]:
     safe_limit = min(max(limit, 1), 100)
     try:
-        page = RUNS.list(safe_limit + 1, cursor)
+        page = RUNS.list(
+            safe_limit + 1,
+            cursor,
+            incident_id=incident_id,
+            mode=mode,
+            review=review,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     has_more = len(page) > safe_limit
@@ -426,6 +438,7 @@ def list_runs(limit: int = 20, cursor: str | None = None) -> dict[str, object]:
         "count": len(runs),
         "runs": runs,
         "next_cursor": runs[-1]["run_id"] if has_more and runs else None,
+        "filters": {"incident_id": incident_id, "mode": mode, "review": review},
     }
 
 

@@ -66,7 +66,7 @@ test("exposes durable experiment history and run restoration", async () => {
   assert.match(page, /INCIDENT SHA-256/);
   assert.match(runsRoute, /\/v1\/runs/);
   assert.match(runsRoute, /encodeURIComponent\(runId\)/);
-  assert.match(runsRoute, /encodeURIComponent\(cursor\)/);
+  assert.match(runsRoute, /params\.set\("cursor", cursor\)/);
 });
 
 test("supports fixture-matched regression comparisons", async () => {
@@ -202,6 +202,18 @@ test("lets users inspect the exact oracle-free agent input", async () => {
   assert.match(page, /Agent input observations/);
   assert.match(page, /private evaluation oracle excluded by the API/);
   assert.match(route, /\/v1\/incidents\/\$\{encodeURIComponent\(incidentId\)\}/);
+});
+
+test("filters run history through the server while preserving cursors", async () => {
+  const [page, route] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/runs/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /Run history filters/);
+  assert.match(page, /runHistoryUrl\(historyCursor\)/);
+  assert.match(page, /Needs investigation/);
+  assert.match(route, /params\.set\("review", review\)/);
+  assert.match(route, /params\.set\("incident_id", incidentId\)/);
 });
 
 test("scopes persistent knowledge collections to investigations", async () => {

@@ -57,6 +57,8 @@ Every investigation has server-validated execution budgets: one to four tool ste
 
 Engineers can append an `accepted`, `rejected`, or `needs_investigation` review with an optional rationale. Reviews never mutate the original run, reject credential-like notes before persistence, and travel with tamper-evident evidence exports.
 
+Run history supports server-side filters for incident, execution mode, and review verdict. Filters compose with the stable cursor, so large experiment histories remain deterministic without loading every run into the browser.
+
 ## Five-minute quickstart
 
 ```bash

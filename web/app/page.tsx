@@ -158,6 +158,7 @@ export default function Home() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [runFilters, setRunFilters] = useState({ incidentId: "", mode: "", review: "" });
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeRun, setActiveRun] = useState<StoredRun | null>(null);
   const [referenceRunId, setReferenceRunId] = useState("");
@@ -288,10 +289,10 @@ export default function Home() {
       : [...current, collectionId]);
   }
 
-  async function refreshRuns() {
+  async function refreshRuns(filters = runFilters) {
     setHistoryLoading(true);
     try {
-      const response = await fetch("/api/runs", { cache: "no-store" });
+      const response = await fetch(runHistoryUrl(null, filters), { cache: "no-store" });
       if (!response.ok) throw new Error("Run history unavailable");
       const payload = await response.json();
       setHistory(payload.runs);
@@ -308,7 +309,7 @@ export default function Home() {
     if (!historyCursor || historyLoadingMore) return;
     setHistoryLoadingMore(true);
     try {
-      const response = await fetch(`/api/runs?cursor=${encodeURIComponent(historyCursor)}`, { cache: "no-store" });
+      const response = await fetch(runHistoryUrl(historyCursor), { cache: "no-store" });
       if (!response.ok) throw new Error("Could not load more runs");
       const payload = await response.json();
       const merged = [...history, ...payload.runs].filter((run, index, runs) => runs.findIndex((item) => item.run_id === run.run_id) === index);
@@ -320,6 +321,16 @@ export default function Home() {
     } finally {
       setHistoryLoadingMore(false);
     }
+  }
+
+  function runHistoryUrl(cursor?: string | null, filters = runFilters) {
+    const params = new URLSearchParams();
+    if (cursor) params.set("cursor", cursor);
+    if (filters.incidentId) params.set("incident_id", filters.incidentId);
+    if (filters.mode) params.set("mode", filters.mode);
+    if (filters.review) params.set("review", filters.review);
+    const queryString = params.toString();
+    return `/api/runs${queryString ? `?${queryString}` : ""}`;
   }
 
   const latestModelRuns = Array.from(
@@ -1016,7 +1027,14 @@ export default function Home() {
             <h2>Run history</h2>
             <p>Every successful execution is stored with its incident hash, mode, model, latency, and immutable result snapshot.</p>
           </div>
-          <button onClick={refreshRuns} disabled={historyLoading}>{historyLoading ? "Loading…" : "Refresh history"}</button>
+          <button onClick={() => void refreshRuns()} disabled={historyLoading}>{historyLoading ? "Loading…" : "Refresh history"}</button>
+        </div>
+        <div className="run-filters" aria-label="Run history filters">
+          <label>INCIDENT<select value={runFilters.incidentId} onChange={(event) => setRunFilters({...runFilters, incidentId: event.target.value})}><option value="">All incidents</option>{catalog?.incidents.map((incident) => <option value={incident.id} key={incident.id}>{incident.title}</option>)}</select></label>
+          <label>MODE<select value={runFilters.mode} onChange={(event) => setRunFilters({...runFilters, mode: event.target.value})}><option value="">All modes</option><option value="baseline">Control</option><option value="model">Agent</option></select></label>
+          <label>HUMAN REVIEW<select value={runFilters.review} onChange={(event) => setRunFilters({...runFilters, review: event.target.value})}><option value="">Any review state</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option><option value="needs_investigation">Needs investigation</option></select></label>
+          <button onClick={() => void refreshRuns()} disabled={historyLoading}>Apply filters</button>
+          <button className="clear" onClick={() => { const empty = { incidentId: "", mode: "", review: "" }; setRunFilters(empty); void refreshRuns(empty); }}>Clear</button>
         </div>
         {history.length ? (
           <><div className="run-list">

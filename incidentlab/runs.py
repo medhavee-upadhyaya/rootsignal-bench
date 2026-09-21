@@ -104,7 +104,14 @@ class RunStore:
             )
         return {"run_id": run_id, "created_at": created_at, "mode": mode}
 
-    def list(self, limit: int = 20, cursor: str | None = None) -> list[dict[str, Any]]:
+    def list(
+        self,
+        limit: int = 20,
+        cursor: str | None = None,
+        incident_id: str | None = None,
+        mode: ExecutionMode | None = None,
+        review: ReviewVerdict | None = None,
+    ) -> list[dict[str, Any]]:
         safe_limit = min(max(limit, 1), 101)
         with self._connect() as connection:
             boundary = None
@@ -114,26 +121,31 @@ class RunStore:
                 ).fetchone()
                 if boundary is None:
                     raise ValueError("Unknown run cursor")
+            conditions: list[str] = []
+            parameters: list[object] = []
             if boundary:
-                rows = connection.execute(
-                    """
-                    SELECT run_id, created_at, incident_id, incident_title, mode, model,
-                           fixture_sha256, result_json, metadata_json
-                    FROM experiment_runs
-                    WHERE created_at < ? OR (created_at = ? AND run_id < ?)
-                    ORDER BY created_at DESC, run_id DESC LIMIT ?
-                    """,
-                    (boundary["created_at"], boundary["created_at"], boundary["run_id"], safe_limit),
-                ).fetchall()
-            else:
-                rows = connection.execute(
-                    """
-                    SELECT run_id, created_at, incident_id, incident_title, mode, model,
-                           fixture_sha256, result_json, metadata_json
-                    FROM experiment_runs ORDER BY created_at DESC, run_id DESC LIMIT ?
-                    """,
-                    (safe_limit,),
-                ).fetchall()
+                conditions.append("(created_at < ? OR (created_at = ? AND run_id < ?))")
+                parameters.extend([boundary["created_at"], boundary["created_at"], boundary["run_id"]])
+            if incident_id:
+                conditions.append("incident_id = ?")
+                parameters.append(incident_id)
+            if mode:
+                conditions.append("mode = ?")
+                parameters.append(mode)
+            if review:
+                conditions.append(
+                    "EXISTS (SELECT 1 FROM run_reviews rr WHERE rr.run_id = experiment_runs.run_id AND rr.verdict = ?)"
+                )
+                parameters.append(review)
+            where = " WHERE " + " AND ".join(conditions) if conditions else ""
+            rows = connection.execute(
+                """
+                SELECT run_id, created_at, incident_id, incident_title, mode, model,
+                       fixture_sha256, result_json, metadata_json
+                FROM experiment_runs
+                """ + where + " ORDER BY created_at DESC, run_id DESC LIMIT ?",
+                (*parameters, safe_limit),
+            ).fetchall()
         return [self._summary(row) for row in rows]
 
     def get(self, run_id: str) -> dict[str, Any] | None:

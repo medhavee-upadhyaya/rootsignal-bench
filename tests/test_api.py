@@ -87,6 +87,28 @@ class APITests(unittest.TestCase):
         _, _, stored = asgi_request("GET", f"/v1/runs/{run_id}")
         self.assertEqual(stored["reviews"], [])
 
+    def test_run_history_filters_by_incident_mode_and_review(self) -> None:
+        _, _, result = asgi_request(
+            "POST", "/v1/baselines/deterministic", body={"incident_id": "billing-clock-001"}
+        )
+        run_id = result["record"]["run_id"]
+        asgi_request(
+            "POST", f"/v1/runs/{run_id}/reviews", body={"verdict": "accepted"}
+        )
+        status, _, payload = asgi_request(
+            "GET", "/v1/runs?incident_id=billing-clock-001&mode=baseline&review=accepted"
+        )
+        self.assertEqual(status, 200)
+        self.assertIn(run_id, [item["run_id"] for item in payload["runs"]])
+        self.assertEqual(
+            payload["filters"],
+            {"incident_id": "billing-clock-001", "mode": "baseline", "review": "accepted"},
+        )
+
+        status, _, payload = asgi_request("GET", "/v1/runs?mode=invalid")
+        self.assertEqual(status, 422)
+        self.assertEqual(payload["error"]["code"], "validation_error")
+
     def test_run_export_is_downloadable_verifiable_and_oracle_free(self) -> None:
         _, _, reference = asgi_request(
             "POST", "/v1/baselines/deterministic", body={"incident_id": "checkout-latency-001"}

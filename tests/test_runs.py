@@ -86,6 +86,28 @@ class RunStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Unknown run cursor"):
                 store.list(cursor="missing")
 
+    def test_run_filters_compose_with_cursor_pagination(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = RunStore(Path(directory) / "runs.db")
+            matching = []
+            for index in range(4):
+                run = store.save(
+                    incident_id="checkout" if index < 3 else "billing",
+                    incident_title="Incident", mode="model" if index != 1 else "baseline",
+                    model="test", query="Investigate", fixture_sha256="e" * 64,
+                    result={}, metadata={},
+                )
+                if index in {0, 2}:
+                    store.add_review(run["run_id"], "accepted")
+                    matching.append(run["run_id"])
+            first = store.list(limit=1, incident_id="checkout", mode="model", review="accepted")
+            second = store.list(
+                limit=1, cursor=first[0]["run_id"], incident_id="checkout",
+                mode="model", review="accepted",
+            )
+            observed = [first[0]["run_id"], second[0]["run_id"]]
+            self.assertEqual(set(observed), set(matching))
+
 
 if __name__ == "__main__":
     unittest.main()

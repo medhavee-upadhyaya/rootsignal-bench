@@ -2,9 +2,17 @@ export async function GET(request: Request) {
   const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
   const runId = new URL(request.url).searchParams.get("run_id");
   const cursor = new URL(request.url).searchParams.get("cursor");
+  const incidentId = new URL(request.url).searchParams.get("incident_id");
+  const mode = new URL(request.url).searchParams.get("mode");
+  const review = new URL(request.url).searchParams.get("review");
+  const params = new URLSearchParams({ limit: "20" });
+  if (cursor) params.set("cursor", cursor);
+  if (incidentId) params.set("incident_id", incidentId);
+  if (mode) params.set("mode", mode);
+  if (review) params.set("review", review);
   const endpoint = runId
     ? `/v1/runs/${encodeURIComponent(runId)}`
-    : `/v1/runs?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+    : `/v1/runs?${params.toString()}`;
   try {
     const response = await fetch(`${apiBase}${endpoint}`, { cache: "no-store" });
     return new Response(await response.text(), {

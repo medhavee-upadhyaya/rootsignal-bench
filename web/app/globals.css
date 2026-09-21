@@ -212,6 +212,11 @@ textarea:read-only { color: #dbe2df; }
 .runs-heading p:last-child { max-width: 650px; margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .runs-heading > button { border: 1px solid var(--ink); background: transparent; color: var(--ink); padding: 9px 12px; font: 700 9px monospace; cursor: pointer; white-space: nowrap; }
 .runs-heading > button:disabled { opacity: .5; cursor: wait; }
+.run-filters { display: grid; grid-template-columns: 1.4fr .8fr 1fr auto auto; align-items: end; gap: 10px; margin-bottom: 12px; padding: 12px; border: 1px solid var(--line); background: #eceee6; }
+.run-filters label { color: var(--muted); font: 700 7px monospace; letter-spacing: .1em; }
+.run-filters select { display: block; width: 100%; margin-top: 5px; padding: 8px; border: 1px solid var(--line); background: white; color: var(--ink); font-size: 9px; }
+.run-filters button { height: 33px; border: 0; background: var(--green); color: white; padding: 0 12px; font: 700 8px monospace; cursor: pointer; }
+.run-filters button.clear { border: 1px solid var(--line); background: transparent; color: var(--muted); }
 .run-list { border: 1px solid var(--line); background: var(--card); }
 .run-list > button { width: 100%; display: grid; grid-template-columns: 74px minmax(220px, 1fr) 86px 165px 54px; align-items: center; gap: 15px; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .run-list > button:last-child { border-bottom: 0; }
