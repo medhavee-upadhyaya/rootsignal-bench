@@ -4,6 +4,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from incidentlab.custom_incidents import CustomIncidentStore
@@ -13,19 +14,20 @@ class CustomIncidentStoreTests(unittest.TestCase):
     def test_existing_database_is_migrated_for_archival(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "legacy.db"
-            with sqlite3.connect(path) as connection:
-                connection.execute(
-                    """
-                    CREATE TABLE custom_incidents (
-                        incident_id TEXT PRIMARY KEY,
-                        created_at TEXT NOT NULL,
-                        fixture_sha256 TEXT NOT NULL,
-                        fixture_json TEXT NOT NULL
+            with closing(sqlite3.connect(path)) as connection:
+                with connection:
+                    connection.execute(
+                        """
+                        CREATE TABLE custom_incidents (
+                            incident_id TEXT PRIMARY KEY,
+                            created_at TEXT NOT NULL,
+                            fixture_sha256 TEXT NOT NULL,
+                            fixture_json TEXT NOT NULL
+                        )
+                        """
                     )
-                    """
-                )
             CustomIncidentStore(path)
-            with sqlite3.connect(path) as connection:
+            with closing(sqlite3.connect(path)) as connection:
                 columns = {row[1] for row in connection.execute("PRAGMA table_info(custom_incidents)")}
             self.assertIn("archived_at", columns)
 
