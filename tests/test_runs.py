@@ -138,6 +138,30 @@ class RunStoreTests(unittest.TestCase):
             self.assertNotIn(older["run_id"], selected_ids)
             self.assertTrue(all(run["mode"] == "model" for run in selected))
 
+    def test_review_filter_uses_current_disposition_and_finds_unreviewed_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = RunStore(Path(directory) / "runs.db")
+            reviewed = store.save(
+                incident_id="checkout", incident_title="Checkout", mode="model",
+                model="test", query="Investigate", fixture_sha256="f" * 64,
+                result={}, metadata={},
+            )
+            unreviewed = store.save(
+                incident_id="billing", incident_title="Billing", mode="model",
+                model="test", query="Investigate", fixture_sha256="e" * 64,
+                result={}, metadata={},
+            )
+            store.add_review(reviewed["run_id"], "rejected", "Initial concern")
+            store.add_review(reviewed["run_id"], "accepted", "Concern resolved")
+
+            accepted = store.list(review="accepted")
+            rejected = store.list(review="rejected")
+            without_review = store.list(review="unreviewed")
+            self.assertEqual([run["run_id"] for run in accepted], [reviewed["run_id"]])
+            self.assertEqual(accepted[0]["latest_review"], "accepted")
+            self.assertNotIn(reviewed["run_id"], [run["run_id"] for run in rejected])
+            self.assertEqual([run["run_id"] for run in without_review], [unreviewed["run_id"]])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -212,6 +212,9 @@ test("filters run history through the server while preserving cursors", async ()
   assert.match(page, /Run history filters/);
   assert.match(page, /runHistoryUrl\(historyCursor\)/);
   assert.match(page, /Needs investigation/);
+  assert.match(page, /CURRENT REVIEW/);
+  assert.match(page, /Unreviewed/);
+  assert.match(page, /run\.latest_review/);
   assert.match(route, /params\.set\("review", review\)/);
   assert.match(route, /params\.set\("incident_id", incidentId\)/);
 });

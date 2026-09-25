@@ -139,6 +139,20 @@ class APITests(unittest.TestCase):
             payload["filters"],
             {"incident_id": "billing-clock-001", "mode": "baseline", "review": "accepted"},
         )
+        self.assertEqual(
+            next(item for item in payload["runs"] if item["run_id"] == run_id)["latest_review"],
+            "accepted",
+        )
+
+        asgi_request("POST", f"/v1/runs/{run_id}/reviews", body={"verdict": "rejected"})
+        _, _, payload = asgi_request(
+            "GET", "/v1/runs?incident_id=billing-clock-001&mode=baseline&review=accepted"
+        )
+        self.assertNotIn(run_id, [item["run_id"] for item in payload["runs"]])
+        _, _, payload = asgi_request(
+            "GET", "/v1/runs?incident_id=billing-clock-001&mode=baseline&review=rejected"
+        )
+        self.assertIn(run_id, [item["run_id"] for item in payload["runs"]])
 
         status, _, payload = asgi_request("GET", "/v1/runs?mode=invalid")
         self.assertEqual(status, 422)

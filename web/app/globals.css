@@ -227,6 +227,10 @@ textarea:read-only { color: #dbe2df; }
 .run-mode.model { color: #657e24; border: 1px solid #a6bd68; background: #eff8d7; }
 .run-list > button > div strong { display: block; font-size: 11px; }
 .run-list > button > div small { display: block; margin-top: 4px; color: var(--muted); font: 8px monospace; }
+.review-state { display: inline-block; margin-top: 6px; padding: 2px 5px; border: 1px solid var(--line); color: var(--muted); font: 700 7px monospace; text-transform: uppercase; letter-spacing: .06em; }
+.review-state.accepted { color: var(--green); border-color: #a5c3b4; background: #edf6f0; }
+.review-state.rejected { color: #9d3c31; border-color: #d7aaa4; background: #fff0ed; }
+.review-state.needs_investigation { color: #826513; border-color: #d2c47e; background: #fff9d9; }
 .run-stats { text-align: right; }
 .run-stats strong { color: var(--green); font-size: 17px !important; }
 .run-identity code { display: block; color: var(--green); font: 9px monospace; }

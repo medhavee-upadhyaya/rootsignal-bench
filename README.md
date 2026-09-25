@@ -57,7 +57,7 @@ Every investigation has server-validated execution budgets: one to four tool ste
 
 Engineers can append an `accepted`, `rejected`, or `needs_investigation` review with an optional rationale. Reviews never mutate the original run, reject credential-like notes before persistence, and travel with tamper-evident evidence exports.
 
-Run history supports server-side filters for incident, execution mode, and review verdict. Filters compose with the stable cursor, so large experiment histories remain deterministic without loading every run into the browser.
+Run history supports server-side filters for incident, execution mode, and current review disposition, including unreviewed runs. Because reviews are append-only, the current disposition is derived from the latest review while preserving the complete audit trail. Filters compose with the stable cursor, so large experiment histories remain deterministic without loading every run into the browser.
 
 Suite evaluation selects the latest model run per incident from the complete server-side history. Its tamper-evident report records included run IDs and any non-evaluable exclusions, so pagination cannot silently change benchmark coverage.
 

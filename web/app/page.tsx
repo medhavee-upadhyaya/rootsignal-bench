@@ -54,6 +54,7 @@ type RunSummary = {
   evidence_items: number;
   latency_ms: number;
   evaluable: boolean;
+  latest_review: "accepted" | "rejected" | "needs_investigation" | null;
 };
 type StoredRun = RunSummary & {
   query: string;
@@ -1024,7 +1025,7 @@ export default function Home() {
         <div className="run-filters" aria-label="Run history filters">
           <label>INCIDENT<select value={runFilters.incidentId} onChange={(event) => setRunFilters({...runFilters, incidentId: event.target.value})}><option value="">All incidents</option>{catalog?.incidents.map((incident) => <option value={incident.id} key={incident.id}>{incident.title}</option>)}</select></label>
           <label>MODE<select value={runFilters.mode} onChange={(event) => setRunFilters({...runFilters, mode: event.target.value})}><option value="">All modes</option><option value="baseline">Control</option><option value="model">Agent</option></select></label>
-          <label>HUMAN REVIEW<select value={runFilters.review} onChange={(event) => setRunFilters({...runFilters, review: event.target.value})}><option value="">Any review state</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option><option value="needs_investigation">Needs investigation</option></select></label>
+          <label>CURRENT REVIEW<select value={runFilters.review} onChange={(event) => setRunFilters({...runFilters, review: event.target.value})}><option value="">Any review state</option><option value="unreviewed">Unreviewed</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option><option value="needs_investigation">Needs investigation</option></select></label>
           <button onClick={() => void refreshRuns()} disabled={historyLoading}>Apply filters</button>
           <button className="clear" onClick={() => { const empty = { incidentId: "", mode: "", review: "" }; setRunFilters(empty); void refreshRuns(empty); }}>Clear</button>
         </div>
@@ -1036,6 +1037,7 @@ export default function Home() {
                 <div>
                   <strong>{run.incident_title}</strong>
                   <small>{run.model} · {run.tool_calls} tools · {run.evidence_items} evidence</small>
+                  <span className={`review-state ${run.latest_review ?? "unreviewed"}`}>{run.latest_review?.replaceAll("_", " ") ?? "unreviewed"}</span>
                 </div>
                 <div className="run-stats">
                   <strong>{Math.round(run.confidence * 100)}%</strong>

@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 ExecutionMode = Literal["baseline", "model"]
 ReviewVerdict = Literal["accepted", "rejected", "needs_investigation"]
+ReviewFilter = Literal["accepted", "rejected", "needs_investigation", "unreviewed"]
 
 
 class RunStore:
@@ -110,7 +111,7 @@ class RunStore:
         cursor: str | None = None,
         incident_id: str | None = None,
         mode: ExecutionMode | None = None,
-        review: ReviewVerdict | None = None,
+        review: ReviewFilter | None = None,
     ) -> list[dict[str, Any]]:
         safe_limit = min(max(limit, 1), 101)
         with self._connect() as connection:
@@ -133,15 +134,25 @@ class RunStore:
                 conditions.append("mode = ?")
                 parameters.append(mode)
             if review:
-                conditions.append(
-                    "EXISTS (SELECT 1 FROM run_reviews rr WHERE rr.run_id = experiment_runs.run_id AND rr.verdict = ?)"
-                )
-                parameters.append(review)
+                if review == "unreviewed":
+                    conditions.append(
+                        "NOT EXISTS (SELECT 1 FROM run_reviews rr WHERE rr.run_id = experiment_runs.run_id)"
+                    )
+                else:
+                    conditions.append(
+                        """(SELECT rr.verdict FROM run_reviews rr
+                            WHERE rr.run_id = experiment_runs.run_id
+                            ORDER BY rr.created_at DESC, rr.rowid DESC LIMIT 1) = ?"""
+                    )
+                    parameters.append(review)
             where = " WHERE " + " AND ".join(conditions) if conditions else ""
             rows = connection.execute(
                 """
                 SELECT run_id, created_at, incident_id, incident_title, mode, model,
-                       fixture_sha256, result_json, metadata_json
+                       fixture_sha256, result_json, metadata_json,
+                       (SELECT rr.verdict FROM run_reviews rr
+                        WHERE rr.run_id = experiment_runs.run_id
+                        ORDER BY rr.created_at DESC, rr.rowid DESC LIMIT 1) AS latest_review
                 FROM experiment_runs
                 """ + where + " ORDER BY created_at DESC, run_id DESC LIMIT ?",
                 (*parameters, safe_limit),
@@ -160,6 +171,7 @@ class RunStore:
         record["result"] = json.loads(row["result_json"])
         record["metadata"] = json.loads(row["metadata_json"])
         record["reviews"] = self.reviews(run_id)
+        record["latest_review"] = record["reviews"][-1]["verdict"] if record["reviews"] else None
         return record
 
     def latest_model_runs_by_incident(self, limit: int = 50) -> list[dict[str, Any]]:
@@ -235,4 +247,5 @@ class RunStore:
             "evidence_items": len(result.get("evidence", [])),
             "latency_ms": metadata.get("latency_ms", 0),
             "evaluable": metadata.get("evaluable", True),
+            "latest_review": row["latest_review"] if "latest_review" in row.keys() else None,
         }

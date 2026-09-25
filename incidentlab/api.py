@@ -419,7 +419,7 @@ def list_runs(
     cursor: str | None = None,
     incident_id: str | None = None,
     mode: ExecutionMode | None = None,
-    review: Literal["accepted", "rejected", "needs_investigation"] | None = None,
+    review: Literal["accepted", "rejected", "needs_investigation", "unreviewed"] | None = None,
 ) -> dict[str, object]:
     safe_limit = min(max(limit, 1), 100)
     try:
