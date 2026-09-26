@@ -24,6 +24,7 @@ from .custom_incidents import CustomIncidentStore
 from .evidence_bundle import build_evidence_bundle
 from .fixtures import load_incident
 from .http import RateLimiter, request_id
+from .intake import normalize_telemetry_intake
 from .knowledge import KnowledgeBase
 from .llm import OllamaClient
 from .models import Incident
@@ -391,6 +392,24 @@ def create_incident(fixture: dict[str, object]) -> dict[str, object]:
                 f"runbook/{runbook.get('id', 'unknown')}", runbook.get("content", "")
             )
         return {"incident": _public_incident(incident), "record": reference}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/incidents/intake", status_code=201)
+def intake_telemetry(payload: dict[str, object]) -> dict[str, object]:
+    try:
+        fixture = normalize_telemetry_intake(payload)
+        response = create_incident(fixture)
+        telemetry = fixture["telemetry"]
+        response["intake"] = {
+            "kind": "live_observations",
+            "metrics": len(telemetry["metrics"]),
+            "logs": len(telemetry["logs"]),
+            "deployments": len(telemetry["deployments"]),
+            "next": f"/v1/investigations",
+        }
+        return response
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

@@ -22,6 +22,60 @@ except (ImportError, RuntimeError):
 
 @unittest.skipIf(InvestigationRequest is None, "API dependencies are not installed")
 class APITests(unittest.TestCase):
+    def test_telemetry_intake_creates_an_investigation_ready_live_incident(self) -> None:
+        incident_id = f"intake-{uuid.uuid4().hex}"
+        status, _, created = asgi_request(
+            "POST",
+            "/v1/incidents/intake",
+            body={
+                "id": incident_id,
+                "title": "Payments latency",
+                "summary": "Payment latency increased after deployment",
+                "telemetry": {
+                    "metrics": {"latency_p95_ms": 2400},
+                    "logs": [
+                        {"level": "error", "message": "request timed out"},
+                        "database pool wait exceeded",
+                    ],
+                    "deployments": [{"service": "payments", "version": "2.4.1"}],
+                },
+            },
+        )
+        self.assertEqual(status, 201)
+        self.assertEqual(created["incident"]["id"], incident_id)
+        self.assertFalse(created["incident"]["metadata"]["evaluable"])
+        self.assertEqual(created["intake"]["logs"], 2)
+        self.assertEqual(created["intake"]["next"], "/v1/investigations")
+
+        status, _, detail = asgi_request("GET", f"/v1/incidents/{incident_id}")
+        self.assertEqual(status, 200)
+        self.assertIn('"message": "request timed out"', detail["telemetry"]["logs"][0])
+        self.assertNotIn("oracle", detail)
+
+        status, _, rejected = asgi_request(
+            "POST", "/v1/incidents/intake", body={"id": f"blocked-{uuid.uuid4().hex}", "oracle": {}}
+        )
+        self.assertEqual(status, 422)
+        self.assertIn("observations only", rejected["error"]["message"])
+
+        credential = "ghp_" + "abcdefghijklmnopqrstuvwxyz1234567890"
+        status, _, rejected = asgi_request(
+            "POST",
+            "/v1/incidents/intake",
+            body={
+                "id": f"secret-{uuid.uuid4().hex}",
+                "title": "Credential leak",
+                "summary": "A log line may contain sensitive content",
+                "telemetry": {
+                    "metrics": {"errors": 1},
+                    "logs": ["request failed", f"authorization {credential}"],
+                    "deployments": ["service v1"],
+                },
+            },
+        )
+        self.assertEqual(status, 422)
+        self.assertNotIn(credential, json.dumps(rejected))
+
     def test_complete_suite_selects_latest_model_run_per_evaluable_incident(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = RunStore(Path(directory) / "runs.db")
