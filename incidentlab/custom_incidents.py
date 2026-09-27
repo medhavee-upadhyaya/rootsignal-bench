@@ -22,6 +22,10 @@ SUPPORTED_TOOLS = {
 }
 
 
+class IncidentConflictError(ValueError):
+    """Raised when an incident id cannot safely be reused."""
+
+
 def validate_custom_fixture(fixture: dict[str, Any]) -> None:
     serialized = json.dumps(fixture, sort_keys=True, separators=(",", ":"))
     if len(serialized.encode()) > MAX_FIXTURE_BYTES:
@@ -92,6 +96,41 @@ class CustomIncidentStore:
         except sqlite3.IntegrityError as exc:
             raise ValueError("Incident id already exists") from exc
         return {"incident_id": fixture["id"], "created_at": created_at, "fixture_sha256": digest}
+
+    def save_idempotent(self, fixture: dict[str, Any]) -> dict[str, str]:
+        """Create once, replay identical active input, and reject divergent reuse."""
+        validate_custom_fixture(fixture)
+        serialized = json.dumps(fixture, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(serialized.encode()).hexdigest()
+        created_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with self._connect() as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO custom_incidents(
+                        incident_id, created_at, fixture_sha256, fixture_json, archived_at
+                    ) VALUES (?, ?, ?, ?, NULL)
+                    """,
+                    (fixture["id"], created_at, digest, serialized),
+                )
+                return {
+                    "incident_id": fixture["id"], "created_at": created_at,
+                    "fixture_sha256": digest, "status": "created",
+                }
+            except sqlite3.IntegrityError:
+                row = connection.execute(
+                    """SELECT created_at, fixture_sha256, archived_at
+                       FROM custom_incidents WHERE incident_id = ?""",
+                    (fixture["id"],),
+                ).fetchone()
+                if row and row["fixture_sha256"] == digest and row["archived_at"] is None:
+                    return {
+                        "incident_id": fixture["id"], "created_at": str(row["created_at"]),
+                        "fixture_sha256": digest, "status": "replayed",
+                    }
+                if row and row["archived_at"] is not None:
+                    raise IncidentConflictError("Archived incident ids cannot be reused")
+                raise IncidentConflictError("Incident id already exists with different observations")
 
     def get(self, incident_id: str) -> Incident | None:
         with self._connect() as connection:

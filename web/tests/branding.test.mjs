@@ -109,6 +109,8 @@ test("explains the external telemetry intake workflow in product", async () => {
   assert.match(page, /Send telemetry from CI, an alert webhook, or an operations script/);
   assert.match(page, /POST \/v1\/investigations/);
   assert.match(page, /Copy intake request/);
+  assert.match(page, /Identical retries return the original record/);
+  assert.match(page, /HTTP 409/);
 });
 
 test("separates real incident response from oracle-backed evaluation", async () => {

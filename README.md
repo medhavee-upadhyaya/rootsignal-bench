@@ -99,7 +99,7 @@ curl -X POST http://localhost:8000/v1/incidents/intake \
   -d '{"id":"checkout-live-001","title":"Checkout latency","summary":"Latency rose after deployment","telemetry":{"metrics":{"latency_p95_ms":2800},"logs":["checkout timeout","database pool wait"],"deployments":["checkout-api v1.8.3"]}}'
 ```
 
-The intake accepts structured metric values, log objects, and deployment objects, normalizes them into immutable observations, and returns the incident ID for `/v1/investigations`. It always creates an ungraded live incident; payloads containing an oracle are rejected.
+The intake accepts structured metric values, log objects, and deployment objects, normalizes them into immutable observations, and returns the incident ID for `/v1/investigations`. It always creates an ungraded live incident; payloads containing an oracle are rejected. Retrying the identical payload is safe and returns the original record with `status: replayed`; reusing the ID with changed observations returns HTTP `409`.
 
 Choose **Live investigation** for active troubleshooting: no known root cause is required, only the connected model can run it, and exports contain evidence without a scorecard. Choose **Evaluation scenario** when you have a reviewed answer key and want control runs, scorecards, comparisons, and suite metrics.
 

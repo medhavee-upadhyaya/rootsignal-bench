@@ -48,6 +48,26 @@ class CustomIncidentStoreTests(unittest.TestCase):
             self.assertIsNone(incident.oracle)
             self.assertEqual(incident.runbooks, [])
 
+    def test_retry_safe_save_replays_identical_input_and_rejects_changes(self) -> None:
+        fixture = json.loads(
+            Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")
+        )
+        fixture["id"] = "retry-safe-checkout"
+        fixture["metadata"]["synthetic"] = False
+        fixture.pop("oracle")
+        with tempfile.TemporaryDirectory() as directory:
+            store = CustomIncidentStore(Path(directory) / "incidents.db")
+            created = store.save_idempotent(fixture)
+            replayed = store.save_idempotent(fixture)
+            self.assertEqual(created["status"], "created")
+            self.assertEqual(replayed["status"], "replayed")
+            self.assertEqual(created["fixture_sha256"], replayed["fixture_sha256"])
+            self.assertEqual(created["created_at"], replayed["created_at"])
+
+            fixture["summary"] = "Changed observations"
+            with self.assertRaisesRegex(ValueError, "different observations"):
+                store.save_idempotent(fixture)
+
     def test_evaluation_incident_still_requires_a_runbook(self) -> None:
         fixture = json.loads(
             Path("fixtures/incidents/checkout_latency.yaml").read_text(encoding="utf-8")

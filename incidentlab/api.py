@@ -20,7 +20,7 @@ except ImportError as exc:  # pragma: no cover
 
 from .agent import Investigator
 from .comparison import compare_runs
-from .custom_incidents import CustomIncidentStore
+from .custom_incidents import CustomIncidentStore, IncidentConflictError
 from .evidence_bundle import build_evidence_bundle
 from .fixtures import load_incident
 from .http import RateLimiter, request_id
@@ -397,19 +397,37 @@ def create_incident(fixture: dict[str, object]) -> dict[str, object]:
 
 
 @app.post("/v1/incidents/intake", status_code=201)
-def intake_telemetry(payload: dict[str, object]) -> dict[str, object]:
+def intake_telemetry(payload: dict[str, object], response: Response) -> dict[str, object]:
     try:
         fixture = normalize_telemetry_intake(payload)
-        response = create_incident(fixture)
+        incident_id = str(fixture.get("id", ""))
+        if _incident_path(incident_id) is not None:
+            raise IncidentConflictError("Built-in incident ids cannot be reused")
+        reference = CUSTOM_INCIDENTS.save_idempotent(fixture)
+        incident = CUSTOM_INCIDENTS.get(incident_id)
+        assert incident is not None
+        for runbook in incident.runbooks:
+            KNOWLEDGE.ingest(
+                f"runbook/{runbook.get('id', 'unknown')}", runbook.get("content", "")
+            )
+        result: dict[str, object] = {
+            "incident": _public_incident(incident),
+            "record": reference,
+        }
         telemetry = fixture["telemetry"]
-        response["intake"] = {
+        result["intake"] = {
             "kind": "live_observations",
+            "status": reference["status"],
             "metrics": len(telemetry["metrics"]),
             "logs": len(telemetry["logs"]),
             "deployments": len(telemetry["deployments"]),
             "next": f"/v1/investigations",
         }
-        return response
+        if reference["status"] == "replayed":
+            response.status_code = 200
+        return result
+    except IncidentConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

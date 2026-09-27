@@ -24,28 +24,40 @@ except (ImportError, RuntimeError):
 class APITests(unittest.TestCase):
     def test_telemetry_intake_creates_an_investigation_ready_live_incident(self) -> None:
         incident_id = f"intake-{uuid.uuid4().hex}"
+        intake_payload = {
+            "id": incident_id,
+            "title": "Payments latency",
+            "summary": "Payment latency increased after deployment",
+            "telemetry": {
+                "metrics": {"latency_p95_ms": 2400},
+                "logs": [
+                    {"level": "error", "message": "request timed out"},
+                    "database pool wait exceeded",
+                ],
+                "deployments": [{"service": "payments", "version": "2.4.1"}],
+            },
+        }
         status, _, created = asgi_request(
             "POST",
             "/v1/incidents/intake",
-            body={
-                "id": incident_id,
-                "title": "Payments latency",
-                "summary": "Payment latency increased after deployment",
-                "telemetry": {
-                    "metrics": {"latency_p95_ms": 2400},
-                    "logs": [
-                        {"level": "error", "message": "request timed out"},
-                        "database pool wait exceeded",
-                    ],
-                    "deployments": [{"service": "payments", "version": "2.4.1"}],
-                },
-            },
+            body=intake_payload,
         )
         self.assertEqual(status, 201)
         self.assertEqual(created["incident"]["id"], incident_id)
         self.assertFalse(created["incident"]["metadata"]["evaluable"])
         self.assertEqual(created["intake"]["logs"], 2)
         self.assertEqual(created["intake"]["next"], "/v1/investigations")
+
+        status, _, replayed = asgi_request("POST", "/v1/incidents/intake", body=intake_payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(replayed["intake"]["status"], "replayed")
+        self.assertEqual(replayed["record"]["created_at"], created["record"]["created_at"])
+
+        changed = json.loads(json.dumps(intake_payload))
+        changed["telemetry"]["metrics"]["latency_p95_ms"] = 3100
+        status, _, conflict = asgi_request("POST", "/v1/incidents/intake", body=changed)
+        self.assertEqual(status, 409)
+        self.assertIn("different observations", conflict["error"]["message"])
 
         status, _, detail = asgi_request("GET", f"/v1/incidents/{incident_id}")
         self.assertEqual(status, 200)
