@@ -102,6 +102,15 @@ test("supports guided and validated JSON incident imports", async () => {
   assert.match(catalogRoute, /\/v1\/incidents/);
 });
 
+test("explains the external telemetry intake workflow in product", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /API intake/);
+  assert.match(page, /\/v1\/incidents\/intake/);
+  assert.match(page, /Send telemetry from CI, an alert webhook, or an operations script/);
+  assert.match(page, /POST \/v1\/investigations/);
+  assert.match(page, /Copy intake request/);
+});
+
 test("separates real incident response from oracle-backed evaluation", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /Live investigation/);

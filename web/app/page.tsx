@@ -97,6 +97,10 @@ type Benchmark = {
 };
 type SuiteReport = { fixture_count: number; models: string[]; aggregate: Omit<Scorecard, "incident_id">; confidence_intervals: { overall: { lower: number; upper: number } }; incidents: Array<Scorecard & { run_id: string; model: string }>; selection?: { strategy: string; candidate_count: number; included_run_ids: string[]; excluded: Array<{ run_id: string; incident_id: string; reason: string }> }; integrity: { algorithm: string; digest: string } };
 
+const telemetryIntakeCommand = `curl -X POST http://localhost:8000/v1/incidents/intake \\
+  -H 'content-type: application/json' \\
+  -d '{"id":"checkout-live-001","title":"Checkout latency","summary":"Latency rose after deployment","telemetry":{"metrics":{"latency_p95_ms":2800},"logs":["checkout timeout","database pool wait"],"deployments":["checkout-api v1.8.3"]}}'`;
+
 const sourceIcons: Record<string, string> = {
   metrics: "⌁",
   logs: "≡",
@@ -175,7 +179,7 @@ export default function Home() {
   const [guidedAgentRunId, setGuidedAgentRunId] = useState<string | null>(null);
   const [guidedExported, setGuidedExported] = useState(false);
   const [showCreator, setShowCreator] = useState(false);
-  const [creatorMode, setCreatorMode] = useState<"guided" | "json">("guided");
+  const [creatorMode, setCreatorMode] = useState<"guided" | "json" | "api">("guided");
   const [creatorPurpose, setCreatorPurpose] = useState<"live" | "evaluation">("live");
   const [creatorStatus, setCreatorStatus] = useState("");
   const [archiveConfirmId, setArchiveConfirmId] = useState("");
@@ -803,7 +807,7 @@ export default function Home() {
           <button onClick={() => setShowCreator(!showCreator)}>{showCreator ? "Close builder" : "Create incident →"}</button>
         </div>
         {showCreator && <div className="creator-panel">
-          <div className="creator-tabs"><button className={creatorMode === "guided" ? "active" : ""} onClick={() => setCreatorMode("guided")}>Guided builder</button><button className={creatorMode === "json" ? "active" : ""} onClick={() => setCreatorMode("json")}>JSON import</button></div>
+          <div className="creator-tabs"><button className={creatorMode === "guided" ? "active" : ""} onClick={() => setCreatorMode("guided")}>Guided builder</button><button className={creatorMode === "json" ? "active" : ""} onClick={() => setCreatorMode("json")}>JSON import</button><button className={creatorMode === "api" ? "active" : ""} onClick={() => setCreatorMode("api")}>API intake</button></div>
           {creatorMode === "guided" ? <div className="creator-form">
             <div className="creator-purpose wide"><button className={creatorPurpose === "live" ? "active" : ""} onClick={() => setCreatorPurpose("live")}><strong>Live investigation</strong><span>No answer key · ungraded</span></button><button className={creatorPurpose === "evaluation" ? "active" : ""} onClick={() => setCreatorPurpose("evaluation")}><strong>Evaluation scenario</strong><span>Hidden oracle · scoreable</span></button></div>
             <label className="telemetry-upload wide">IMPORT TELEMETRY BUNDLE · JSON<input type="file" accept="application/json,.json" onChange={(event) => { void importTelemetryFile(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /><span>Parsed in your browser · maximum 1 MB · review every field before saving</span></label>
@@ -819,8 +823,8 @@ export default function Home() {
             {creatorPurpose === "evaluation" && <><label className="wide private-field">HIDDEN ROOT CAUSE<textarea rows={2} value={incidentDraft.rootCause} onChange={(event) => setIncidentDraft({...incidentDraft, rootCause: event.target.value})} placeholder="Expected diagnosis used only for scoring" /></label>
             <label>REQUIRED EVIDENCE · ONE PER LINE<textarea rows={3} value={incidentDraft.evidence} onChange={(event) => setIncidentDraft({...incidentDraft, evidence: event.target.value})} /></label>
             <label>REMEDIATION · ONE PER LINE<textarea rows={3} value={incidentDraft.remediation} onChange={(event) => setIncidentDraft({...incidentDraft, remediation: event.target.value})} /></label></>}
-          </div> : <label className="json-import">FIXTURE JSON<textarea rows={18} value={jsonFixture} onChange={(event) => setJsonFixture(event.target.value)} placeholder='{"schema_version":"1.0","id":"..."}' /></label>}
-          <div className="creator-actions"><span>{creatorStatus || (creatorPurpose === "live" ? "Live incidents are investigated without an answer key and excluded from benchmark scores." : "The oracle is stored server-side and never returned by catalog APIs.")}</span><button onClick={createCustomIncident}>{creatorMode === "json" ? "Validate and import" : creatorPurpose === "live" ? "Create live incident" : "Create evaluation"} →</button></div>
+          </div> : creatorMode === "json" ? <label className="json-import">FIXTURE JSON<textarea rows={18} value={jsonFixture} onChange={(event) => setJsonFixture(event.target.value)} placeholder='{"schema_version":"1.0","id":"..."}' /></label> : <div className="api-intake"><div><span>01 · INGEST OBSERVATIONS</span><h3>Send telemetry from CI, an alert webhook, or an operations script.</h3><p>The endpoint accepts metrics, at least two logs, deployment history, and optional runbooks. It rejects secrets and grading oracles before persistence.</p></div><pre><code>{telemetryIntakeCommand}</code></pre><div className="api-handoff"><span>02 · INVESTIGATE</span><code>POST /v1/investigations {`{"incident_id":"checkout-live-001"}`}</code><p>Use the returned incident ID to start the bounded, read-only model investigation.</p></div></div>}
+          {creatorMode === "api" ? <div className="creator-actions"><span>Live API intake creates an ungraded incident and returns observation counts plus the next endpoint.</span><button onClick={() => copySetupCommand("intake", telemetryIntakeCommand)}>{copiedCommand === "intake" ? "Copied" : "Copy intake request"}</button></div> : <div className="creator-actions"><span>{creatorStatus || (creatorPurpose === "live" ? "Live incidents are investigated without an answer key and excluded from benchmark scores." : "The oracle is stored server-side and never returned by catalog APIs.")}</span><button onClick={createCustomIncident}>{creatorMode === "json" ? "Validate and import" : creatorPurpose === "live" ? "Create live incident" : "Create evaluation"} →</button></div>}
         </div>}
       </section>
 
