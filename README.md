@@ -244,6 +244,7 @@ It records TTFT, end-to-end percentiles, request and output-token throughput, fa
 - Structured evidence and bounded tool budgets
 - Input validation and tool allowlists
 - Correlation IDs, structured errors, security headers, and configurable rate limiting
+- Optional bearer authentication for every state-changing API request, with server-only web proxy credentials
 - OpenTelemetry spans and Prometheus-compatible metrics endpoint
 - Versioned Grafana dashboard, Prometheus alerts, structured JSON events, and grounding signals
 - Health/readiness endpoints

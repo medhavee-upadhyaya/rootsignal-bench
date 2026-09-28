@@ -4,7 +4,7 @@ export async function POST(request: Request) {
   try {
     const response = await fetch(`${apiBase}/v1/knowledge`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: backendHeaders(),
       body: JSON.stringify(body),
     });
     return new Response(await response.text(), {
@@ -15,3 +15,4 @@ export async function POST(request: Request) {
     return Response.json({ detail: "RootSignal API unavailable" }, { status: 503 });
   }
 }
+import { backendHeaders } from "@/lib/api-auth";

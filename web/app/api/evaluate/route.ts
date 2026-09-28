@@ -5,7 +5,7 @@ export async function POST(request: Request) {
     const latest = body.selection === "latest_model_run_per_incident";
     const response = await fetch(`${apiBase}/v1/evaluation-suites${latest ? "/latest" : ""}`, {
       method: latest ? "GET" : "POST",
-      headers: { "content-type": "application/json" },
+      headers: backendHeaders(),
       body: latest ? undefined : JSON.stringify(body),
     });
     return new Response(await response.text(), {
@@ -16,3 +16,4 @@ export async function POST(request: Request) {
     return Response.json({ error: { message: "RootSignal API unavailable" } }, { status: 503 });
   }
 }
+import { backendHeaders } from "@/lib/api-auth";

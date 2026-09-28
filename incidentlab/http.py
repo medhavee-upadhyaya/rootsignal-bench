@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import re
 import threading
 import time
@@ -8,6 +10,32 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+
+
+class ApiKeyAuthorizer:
+    """Constant-time bearer-key validation with an opt-in local-development default."""
+
+    def __init__(self, configured: str = "") -> None:
+        keys = [key.strip() for key in configured.split(",") if key.strip()]
+        if any(len(key) < 16 for key in keys):
+            raise ValueError("Configured RootSignal API keys must contain at least 16 characters")
+        self._digests = tuple(hashlib.sha256(key.encode()).digest() for key in keys)
+
+    @property
+    def required(self) -> bool:
+        return bool(self._digests)
+
+    def authorize(self, authorization: str | None) -> bool:
+        if not self.required:
+            return True
+        scheme, separator, token = (authorization or "").partition(" ")
+        if not separator or scheme.lower() != "bearer" or not token:
+            return False
+        presented = hashlib.sha256(token.encode()).digest()
+        matched = False
+        for expected in self._digests:
+            matched = hmac.compare_digest(presented, expected) or matched
+        return matched
 
 
 def request_id(value: str | None) -> str:

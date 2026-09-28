@@ -113,6 +113,21 @@ test("explains the external telemetry intake workflow in product", async () => {
   assert.match(page, /HTTP 409/);
 });
 
+test("keeps backend authentication in the server-side proxy", async () => {
+  const [auth, incidents, investigate, reviews] = await Promise.all([
+    readFile(new URL("../lib/api-auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/incidents/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/runs/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(auth, /process\.env\.ROOTSIGNAL_API_KEY/);
+  assert.match(auth, /Bearer \$\{key\}/);
+  assert.match(incidents, /backendHeaders/);
+  assert.match(investigate, /backendHeaders/);
+  assert.match(reviews, /backendHeaders/);
+  assert.doesNotMatch(auth, /NEXT_PUBLIC_/);
+});
+
 test("separates real incident response from oracle-backed evaluation", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /Live investigation/);

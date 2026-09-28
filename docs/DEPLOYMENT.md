@@ -12,6 +12,8 @@ The application is available at `http://localhost:3000`, the API at `http://loca
 
 The built-in and custom incidents, experiment history, and scoped knowledge collections share the persistent SQLite volume. Back up the volume before destructive infrastructure changes. The deterministic control remains usable when the model endpoint is offline; independent model runs require the configured endpoint.
 
+Before exposing RootSignal beyond localhost, set `ROOTSIGNAL_API_KEYS` on the API to one or more comma-separated, secret-manager-supplied values of at least 16 characters. All state-changing requests then require `Authorization: Bearer <key>`; health, readiness, catalogs, run reads, and other GET requests remain readable. Set `ROOTSIGNAL_API_KEY` on the web service to one of those values so the server-side web proxy can authenticate without exposing the key to browser JavaScript. Leave both variables empty only for trusted local development.
+
 Both containers run as UID 10001 with all Linux capabilities dropped, a read-only root filesystem, `no-new-privileges`, bounded temporary storage, and health checks. Only `/data` is writable for the API.
 
 ## Kubernetes
@@ -32,7 +34,7 @@ For multiple API replicas, replace the default `ReadWriteOnce` SQLite volume wit
 
 Pushing a version tag such as `v0.2.0` builds multi-architecture API and web images in GitHub Actions. Images receive semantic-version and Git-SHA tags plus SBOM and build-provenance attestations. Kubernetes uses immutable version tags instead of `latest`; production operators should pin the resulting image digest for strict reproducibility.
 
-No credential belongs in the manifest or image. Supply credentials, if a remote model endpoint requires them, through the platform secret manager at deployment time.
+No credential belongs in the manifest or image. Supply RootSignal API keys and any remote-model credentials through the platform secret manager at deployment time.
 
 ## Release verification
 

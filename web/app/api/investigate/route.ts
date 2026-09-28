@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       : "/v1/baselines/deterministic";
     const response = await fetch(`${apiBase}${endpoint}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: backendHeaders(),
       body: JSON.stringify({
         incident_id: body.incident_id,
         query: body.query,
@@ -27,3 +27,4 @@ export async function POST(request: Request) {
     return Response.json({ detail: "RootSignal API unavailable" }, { status: 503 });
   }
 }
+import { backendHeaders } from "@/lib/api-auth";

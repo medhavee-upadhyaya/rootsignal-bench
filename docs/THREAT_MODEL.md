@@ -20,6 +20,8 @@ Tools are allowlisted and typed, call counts are bounded, evidence preserves pro
 
 Knowledge documents and custom incident fixtures are screened for common private-key, cloud-key, access-token, bearer-token, and credential-assignment patterns before persistence. Detection is intentionally fail-closed for likely matches, but pattern screening is not a substitute for upstream redaction, a platform secret scanner, or tenant-aware authorization.
 
+When `ROOTSIGNAL_API_KEYS` is configured, all state-changing HTTP methods require a bearer key compared in constant time. The web proxy reads its backend key only from the server environment. Authentication is deliberately optional for local development, so an internet-facing deployment without this variable is unsafe and unsupported.
+
 ## Explicit non-goals
 
 The reference implementation does not execute shell commands, modify infrastructure, or claim suitability for unsupervised remediation.

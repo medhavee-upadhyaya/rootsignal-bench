@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const response = await fetch(`${apiBase}${endpoint}`, { cache: "no-store" });
     return new Response(await response.text(), {
       status: response.status,
-      headers: { "content-type": "application/json" },
+      headers: backendHeaders(),
     });
   } catch {
     return Response.json({ error: { message: "RootSignal API unavailable" } }, { status: 503 });
@@ -42,3 +42,4 @@ export async function POST(request: Request) {
     return Response.json({ error: { message: "RootSignal API unavailable" } }, { status: 503 });
   }
 }
+import { backendHeaders } from "@/lib/api-auth";

@@ -8,6 +8,7 @@ services:
       INCIDENTLAB_LLM_URL: ${INCIDENTLAB_LLM_URL:-http://host.docker.internal:11434}
       INCIDENTLAB_MODEL: ${INCIDENTLAB_MODEL:-qwen3:1.7b}
       ROOTSIGNAL_RATE_LIMIT: ${ROOTSIGNAL_RATE_LIMIT:-60}
+      ROOTSIGNAL_API_KEYS: ${ROOTSIGNAL_API_KEYS:-}
     ports: ["8000:8000"]
     volumes:
       - rootsignal-data:/data
@@ -29,6 +30,7 @@ services:
       context: web
     environment:
       INCIDENTLAB_API_URL: http://api:8000
+      ROOTSIGNAL_API_KEY: ${ROOTSIGNAL_API_KEY:-}
     ports: ["3000:3000"]
     depends_on:
       api: {condition: service_healthy}

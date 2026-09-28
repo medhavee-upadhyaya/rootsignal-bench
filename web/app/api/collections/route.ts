@@ -5,7 +5,7 @@ export async function GET() {
     const response = await fetch(`${apiBase}/v1/knowledge/collections`, { cache: "no-store" });
     return new Response(await response.text(), {
       status: response.status,
-      headers: { "content-type": "application/json" },
+      headers: backendHeaders(),
     });
   } catch {
     return Response.json({ detail: "RootSignal API unavailable" }, { status: 503 });
@@ -28,3 +28,4 @@ export async function POST(request: Request) {
     return Response.json({ detail: "RootSignal API unavailable" }, { status: 503 });
   }
 }
+import { backendHeaders } from "@/lib/api-auth";

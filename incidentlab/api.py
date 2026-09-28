@@ -23,7 +23,7 @@ from .comparison import compare_runs
 from .custom_incidents import CustomIncidentStore, IncidentConflictError
 from .evidence_bundle import build_evidence_bundle
 from .fixtures import load_incident
-from .http import RateLimiter, request_id
+from .http import ApiKeyAuthorizer, RateLimiter, request_id
 from .intake import normalize_telemetry_intake
 from .knowledge import KnowledgeBase
 from .llm import OllamaClient
@@ -50,6 +50,7 @@ RATE_LIMITER = RateLimiter(
     limit=int(os.getenv("ROOTSIGNAL_RATE_LIMIT", "60")),
     window_seconds=float(os.getenv("ROOTSIGNAL_RATE_WINDOW_SECONDS", "60")),
 )
+AUTHORIZER = ApiKeyAuthorizer(os.getenv("ROOTSIGNAL_API_KEYS", ""))
 RATE_LIMITED_PATHS = {
     "/v1/investigations",
     "/v1/investigations/stream",
@@ -71,7 +72,15 @@ async def harden_http(request: Request, call_next):
     started = time.perf_counter()
     correlation_id = request_id(request.headers.get("x-request-id"))
     request.state.request_id = correlation_id
-    if any(
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and not AUTHORIZER.authorize(
+        request.headers.get("authorization")
+    ):
+        response = JSONResponse(
+            status_code=401,
+            content=_error("unauthorized", "A valid bearer key is required", correlation_id),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    elif any(
         request.url.path == path or request.url.path.startswith(f"{path}/")
         for path in RATE_LIMITED_PATHS
     ):
@@ -362,6 +371,10 @@ def system() -> dict[str, object]:
         "retrieval": {"engine": "sqlite-fts5", **KNOWLEDGE.stats()},
         "tools": ["query_metrics", "query_logs", "query_deployments", "search_runbooks"],
         "inference": {"development": "llama.cpp", "production": "openai-compatible/vllm"},
+        "security": {
+            "write_auth_required": AUTHORIZER.required,
+            "scheme": "bearer" if AUTHORIZER.required else "none",
+        },
     }
 
 

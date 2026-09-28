@@ -14,7 +14,7 @@ try:
     from incidentlab.agent import Investigator
     from incidentlab.evidence_bundle import verify_evidence_bundle
     from incidentlab.fixtures import load_incident
-    from incidentlab.http import RateLimiter, request_id
+    from incidentlab.http import ApiKeyAuthorizer, RateLimiter, request_id
     from incidentlab.runs import RunStore
 except (ImportError, RuntimeError):
     InvestigationRequest = None  # type: ignore[assignment,misc]
@@ -22,6 +22,42 @@ except (ImportError, RuntimeError):
 
 @unittest.skipIf(InvestigationRequest is None, "API dependencies are not installed")
 class APITests(unittest.TestCase):
+    def test_write_auth_rejects_missing_or_wrong_keys_without_protecting_reads(self) -> None:
+        authorizer = ApiKeyAuthorizer("test-access-key-123456789")
+        with patch("incidentlab.api.AUTHORIZER", authorizer):
+            status, headers, payload = asgi_request(
+                "POST", "/v1/baselines/deterministic",
+                body={"incident_id": "checkout-latency-001"},
+            )
+            self.assertEqual(status, 401)
+            self.assertEqual(headers["www-authenticate"], "Bearer")
+            self.assertEqual(payload["error"]["code"], "unauthorized")
+
+            status, _, _ = asgi_request(
+                "POST", "/v1/baselines/deterministic",
+                body={"incident_id": "checkout-latency-001"},
+                headers={"authorization": "Bearer wrong-access-key-123456"},
+            )
+            self.assertEqual(status, 401)
+
+            status, _, result = asgi_request(
+                "POST", "/v1/baselines/deterministic",
+                body={"incident_id": "checkout-latency-001"},
+                headers={"authorization": "Bearer test-access-key-123456789"},
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(result["incident_id"], "checkout-latency-001")
+
+            status, _, system = asgi_request("GET", "/v1/system")
+            self.assertEqual(status, 200)
+            self.assertTrue(system["security"]["write_auth_required"])
+            self.assertNotIn("test-access-key", json.dumps(system))
+
+    def test_api_key_authorizer_is_optional_and_rejects_weak_configuration(self) -> None:
+        self.assertTrue(ApiKeyAuthorizer().authorize(None))
+        with self.assertRaisesRegex(ValueError, "at least 16"):
+            ApiKeyAuthorizer("too-short")
+
     def test_telemetry_intake_creates_an_investigation_ready_live_incident(self) -> None:
         incident_id = f"intake-{uuid.uuid4().hex}"
         intake_payload = {
