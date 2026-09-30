@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     ? `/v1/runs/${encodeURIComponent(runId)}`
     : `/v1/runs?${params.toString()}`;
   try {
-    const response = await fetch(`${apiBase}${endpoint}`, { cache: "no-store" });
+    const response = await fetch(`${apiBase}${endpoint}`, { cache: "no-store", headers: backendHeaders(false) });
     return new Response(await response.text(), {
       status: response.status,
       headers: backendHeaders(),

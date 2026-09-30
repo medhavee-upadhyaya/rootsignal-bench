@@ -5,7 +5,7 @@ export async function GET(request: Request) {
     ? `/v1/incidents/${encodeURIComponent(incidentId)}`
     : "/v1/incidents";
   try {
-    const response = await fetch(`${apiBase}${endpoint}`, { cache: "no-store" });
+    const response = await fetch(`${apiBase}${endpoint}`, { cache: "no-store", headers: backendHeaders(false) });
     return new Response(await response.text(), {
       status: response.status,
       headers: backendHeaders(),

@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   try {
     const response = await fetch(
       `${apiBase}/v1/runs/${encodeURIComponent(runId)}/export${comparison}`,
-      { cache: "no-store" },
+      { cache: "no-store", headers: backendHeaders(false) },
     );
     return new Response(await response.arrayBuffer(), {
       status: response.status,
@@ -26,3 +26,4 @@ export async function GET(request: Request) {
     return Response.json({ error: { message: "RootSignal API unavailable" } }, { status: 503 });
   }
 }
+import { backendHeaders } from "@/lib/api-auth";

@@ -114,17 +114,23 @@ test("explains the external telemetry intake workflow in product", async () => {
 });
 
 test("keeps backend authentication in the server-side proxy", async () => {
-  const [auth, incidents, investigate, reviews] = await Promise.all([
+  const [auth, incidents, investigate, reviews, collections, exportRoute] = await Promise.all([
     readFile(new URL("../lib/api-auth.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/incidents/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/runs/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/collections/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/export/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(auth, /process\.env\.ROOTSIGNAL_API_KEY/);
   assert.match(auth, /Bearer \$\{key\}/);
   assert.match(incidents, /backendHeaders/);
   assert.match(investigate, /backendHeaders/);
   assert.match(reviews, /backendHeaders/);
+  assert.match(incidents, /cache: "no-store", headers: backendHeaders\(false\)/);
+  assert.match(collections, /cache: "no-store", headers: backendHeaders\(false\)/);
+  assert.match(reviews, /cache: "no-store", headers: backendHeaders\(false\)/);
+  assert.match(exportRoute, /backendHeaders\(false\)/);
   assert.doesNotMatch(auth, /NEXT_PUBLIC_/);
 });
 

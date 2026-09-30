@@ -61,6 +61,7 @@ RATE_LIMITED_PATHS = {
     "/v1/evaluation-suites",
     "/v1/runs",
 }
+PUBLIC_AUTH_PATHS = {"/healthz", "/readyz", "/v1/system", "/v1/benchmarks/latest"}
 
 
 def _error(code: str, message: str, correlation_id: str) -> dict[str, object]:
@@ -72,9 +73,12 @@ async def harden_http(request: Request, call_next):
     started = time.perf_counter()
     correlation_id = request_id(request.headers.get("x-request-id"))
     request.state.request_id = correlation_id
-    if request.method not in {"GET", "HEAD", "OPTIONS"} and not AUTHORIZER.authorize(
-        request.headers.get("authorization")
-    ):
+    requires_auth = (
+        request.method not in {"GET", "HEAD", "OPTIONS"}
+        or request.url.path == "/metrics"
+        or (request.url.path.startswith("/v1/") and request.url.path not in PUBLIC_AUTH_PATHS)
+    )
+    if requires_auth and not AUTHORIZER.authorize(request.headers.get("authorization")):
         response = JSONResponse(
             status_code=401,
             content=_error("unauthorized", "A valid bearer key is required", correlation_id),
@@ -372,8 +376,9 @@ def system() -> dict[str, object]:
         "tools": ["query_metrics", "query_logs", "query_deployments", "search_runbooks"],
         "inference": {"development": "llama.cpp", "production": "openai-compatible/vllm"},
         "security": {
-            "write_auth_required": AUTHORIZER.required,
+            "api_auth_required": AUTHORIZER.required,
             "scheme": "bearer" if AUTHORIZER.required else "none",
+            "public_paths": sorted(PUBLIC_AUTH_PATHS),
         },
     }
 

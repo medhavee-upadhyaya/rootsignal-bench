@@ -22,7 +22,7 @@ except (ImportError, RuntimeError):
 
 @unittest.skipIf(InvestigationRequest is None, "API dependencies are not installed")
 class APITests(unittest.TestCase):
-    def test_write_auth_rejects_missing_or_wrong_keys_without_protecting_reads(self) -> None:
+    def test_api_auth_protects_sensitive_data_but_keeps_status_public(self) -> None:
         authorizer = ApiKeyAuthorizer("test-access-key-123456789")
         with patch("incidentlab.api.AUTHORIZER", authorizer):
             status, headers, payload = asgi_request(
@@ -40,6 +40,17 @@ class APITests(unittest.TestCase):
             )
             self.assertEqual(status, 401)
 
+            status, _, payload = asgi_request("GET", "/v1/incidents")
+            self.assertEqual(status, 401)
+            self.assertEqual(payload["error"]["code"], "unauthorized")
+
+            status, _, catalog = asgi_request(
+                "GET", "/v1/incidents",
+                headers={"authorization": "Bearer test-access-key-123456789"},
+            )
+            self.assertEqual(status, 200)
+            self.assertGreater(catalog["count"], 0)
+
             status, _, result = asgi_request(
                 "POST", "/v1/baselines/deterministic",
                 body={"incident_id": "checkout-latency-001"},
@@ -50,8 +61,12 @@ class APITests(unittest.TestCase):
 
             status, _, system = asgi_request("GET", "/v1/system")
             self.assertEqual(status, 200)
-            self.assertTrue(system["security"]["write_auth_required"])
+            self.assertTrue(system["security"]["api_auth_required"])
+            self.assertIn("/healthz", system["security"]["public_paths"])
             self.assertNotIn("test-access-key", json.dumps(system))
+
+            status, _, _ = asgi_raw_request("GET", "/metrics")
+            self.assertEqual(status, 401)
 
     def test_api_key_authorizer_is_optional_and_rejects_weak_configuration(self) -> None:
         self.assertTrue(ApiKeyAuthorizer().authorize(None))
