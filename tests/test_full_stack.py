@@ -93,6 +93,7 @@ class FullStackInvestigationTests(unittest.TestCase):
             )
 
         self.assertEqual(status, 200)
+        self.assertEqual(result["workflow"], {"status": "completed", "retryable": False})
         self.assertEqual(result["intake"]["status"], "created")
         self.assertEqual(result["incident"]["id"], incident_id)
         run_id = result["investigation"]["record"]["run_id"]
@@ -111,6 +112,50 @@ class FullStackInvestigationTests(unittest.TestCase):
         self.assertEqual(retry["intake"]["status"], "replayed")
         self.assertEqual(retry["intake_record"]["created_at"], result["intake_record"]["created_at"])
         self.assertNotEqual(retry["investigation"]["record"]["run_id"], run_id)
+
+    def test_one_call_workflow_reports_persisted_intake_when_inference_is_down(self) -> None:
+        incident_id = f"outage-{uuid.uuid4().hex}"
+        payload = {
+            "intake": {
+                "id": incident_id,
+                "title": "Payments alert",
+                "summary": "Payments are timing out",
+                "telemetry": {
+                    "metrics": {"timeout_rate": 0.18},
+                    "logs": ["payment timeout", "upstream deadline exceeded"],
+                    "deployments": ["payments-api v4.2"],
+                },
+            }
+        }
+        with self.assertLogs("rootsignal.api", level="WARNING"):
+            with patch(
+                "incidentlab.llm.urllib.request.urlopen",
+                side_effect=urllib.error.URLError("private provider outage"),
+            ):
+                status, _, result = asgi_request(
+                    "POST", "/v1/incidents/intake/investigate", body=payload
+                )
+
+        self.assertEqual(status, 503)
+        self.assertEqual(result["error"]["code"], "investigation_unavailable")
+        self.assertEqual(result["workflow"]["status"], "intake_persisted")
+        self.assertTrue(result["workflow"]["retryable"])
+        self.assertEqual(result["intake"]["status"], "created")
+        self.assertEqual(result["incident"]["id"], incident_id)
+        self.assertNotIn("private provider outage", json.dumps(result))
+
+        stored_status, _, stored = asgi_request("GET", f"/v1/incidents/{incident_id}")
+        self.assertEqual(stored_status, 200)
+        self.assertEqual(stored["id"], incident_id)
+
+        provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):
+            retry_status, _, retry = asgi_request(
+                "POST", "/v1/incidents/intake/investigate", body=payload
+            )
+        self.assertEqual(retry_status, 200)
+        self.assertEqual(retry["intake"]["status"], "replayed")
+        self.assertEqual(retry["workflow"]["status"], "completed")
 
     def test_streaming_api_emits_real_progress_and_persists_final_run(self) -> None:
         provider = OpenAIProvider()

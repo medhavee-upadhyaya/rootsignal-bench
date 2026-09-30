@@ -110,7 +110,7 @@ test("explains the external telemetry intake workflow in product", async () => {
   assert.match(page, /Send telemetry from CI, an alert webhook, or an operations script/);
   assert.match(page, /COMPOSABLE API/);
   assert.match(page, /Copy complete workflow/);
-  assert.match(page, /Identical retries reuse the incident/);
+  assert.match(page, /503 confirms intake_persisted/);
   assert.match(page, /HTTP 409/);
 });
 

@@ -8,7 +8,7 @@ import queue
 import threading
 import time
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 try:
     from fastapi import FastAPI, HTTPException, Request, Response
@@ -469,20 +469,44 @@ def _create_or_replay_intake(payload: dict[str, object]) -> dict[str, object]:
 def intake_and_investigate(
     payload: TelemetryInvestigationRequest,
     request: Request,
-) -> dict[str, object]:
+) -> Any:
     intake_result = _create_or_replay_intake(payload.intake)
     incident = intake_result["incident"]
-    investigation = investigate(
-        InvestigationRequest(
-            incident_id=str(incident["id"]),
-            query=payload.query,
-            collection_ids=payload.collection_ids,
-            max_steps=payload.max_steps,
-            max_completion_tokens=payload.max_completion_tokens,
-        ),
-        request,
-    )
+    try:
+        investigation = investigate(
+            InvestigationRequest(
+                incident_id=str(incident["id"]),
+                query=payload.query,
+                collection_ids=payload.collection_ids,
+                max_steps=payload.max_steps,
+                max_completion_tokens=payload.max_completion_tokens,
+            ),
+            request,
+        )
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            raise
+        correlation_id = getattr(request.state, "request_id", request_id(None))
+        return JSONResponse(
+            status_code=503,
+            content={
+                **_error(
+                    "investigation_unavailable",
+                    "Telemetry was stored, but model investigation is temporarily unavailable",
+                    correlation_id,
+                ),
+                "workflow": {
+                    "status": "intake_persisted",
+                    "retryable": True,
+                    "retry": {"method": "POST", "path": "/v1/incidents/intake/investigate"},
+                },
+                "intake": intake_result["intake"],
+                "intake_record": intake_result["record"],
+                "incident": incident,
+            },
+        )
     return {
+        "workflow": {"status": "completed", "retryable": False},
         "intake": intake_result["intake"],
         "intake_record": intake_result["record"],
         "incident": incident,
