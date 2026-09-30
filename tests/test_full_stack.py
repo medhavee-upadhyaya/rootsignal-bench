@@ -69,6 +69,49 @@ class OpenAIProvider:
 
 @unittest.skipIf(METRICS is None, "API dependencies are not installed")
 class FullStackInvestigationTests(unittest.TestCase):
+    def test_one_call_telemetry_workflow_persists_incident_and_model_run(self) -> None:
+        incident_id = f"alert-{uuid.uuid4().hex}"
+        payload = {
+            "intake": {
+                "id": incident_id,
+                "title": "Checkout alert",
+                "summary": "Checkout latency increased after deployment",
+                "telemetry": {
+                    "metrics": {"latency_p95_ms": 2800, "db_pool_wait_ms": 1830},
+                    "logs": ["checkout timeout", "database pool wait exceeded"],
+                    "deployments": ["checkout-api v1.8.3 reduced DB_POOL_SIZE"],
+                },
+            },
+            "query": "Determine why checkout latency increased",
+            "max_steps": 4,
+            "max_completion_tokens": 256,
+        }
+        provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):
+            status, _, result = asgi_request(
+                "POST", "/v1/incidents/intake/investigate", body=payload
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(result["intake"]["status"], "created")
+        self.assertEqual(result["incident"]["id"], incident_id)
+        run_id = result["investigation"]["record"]["run_id"]
+        stored_status, _, stored = asgi_request("GET", f"/v1/runs/{run_id}")
+        self.assertEqual(stored_status, 200)
+        self.assertEqual(stored["incident_id"], incident_id)
+        self.assertEqual(stored["query"], payload["query"])
+        self.assertFalse(stored["evaluable"])
+
+        retry_provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=retry_provider.urlopen):
+            retry_status, _, retry = asgi_request(
+                "POST", "/v1/incidents/intake/investigate", body=payload
+            )
+        self.assertEqual(retry_status, 200)
+        self.assertEqual(retry["intake"]["status"], "replayed")
+        self.assertEqual(retry["intake_record"]["created_at"], result["intake_record"]["created_at"])
+        self.assertNotEqual(retry["investigation"]["record"]["run_id"], run_id)
+
     def test_streaming_api_emits_real_progress_and_persists_final_run(self) -> None:
         provider = OpenAIProvider()
         with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):

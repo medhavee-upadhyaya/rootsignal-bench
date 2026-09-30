@@ -166,6 +166,16 @@ class InvestigationRequest(BaseModel):
     max_completion_tokens: int = Field(default=500, ge=64, le=1000)
 
 
+class TelemetryInvestigationRequest(BaseModel):
+    intake: dict[str, object]
+    query: str | None = Field(default=None, min_length=3, max_length=2000)
+    collection_ids: list[str] = Field(
+        default_factory=lambda: ["incident-runbooks"], min_length=1, max_length=10
+    )
+    max_steps: int = Field(default=4, ge=1, le=4)
+    max_completion_tokens: int = Field(default=500, ge=64, le=1000)
+
+
 class KnowledgeRequest(BaseModel):
     collection_id: str = Field(pattern=r"^[a-z0-9-]+$")
     source: str = Field(min_length=1, max_length=200)
@@ -416,6 +426,13 @@ def create_incident(fixture: dict[str, object]) -> dict[str, object]:
 
 @app.post("/v1/incidents/intake", status_code=201)
 def intake_telemetry(payload: dict[str, object], response: Response) -> dict[str, object]:
+    result = _create_or_replay_intake(payload)
+    if result["intake"]["status"] == "replayed":
+        response.status_code = 200
+    return result
+
+
+def _create_or_replay_intake(payload: dict[str, object]) -> dict[str, object]:
     try:
         fixture = normalize_telemetry_intake(payload)
         incident_id = str(fixture.get("id", ""))
@@ -441,13 +458,36 @@ def intake_telemetry(payload: dict[str, object], response: Response) -> dict[str
             "deployments": len(telemetry["deployments"]),
             "next": f"/v1/investigations",
         }
-        if reference["status"] == "replayed":
-            response.status_code = 200
         return result
     except IncidentConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/incidents/intake/investigate")
+def intake_and_investigate(
+    payload: TelemetryInvestigationRequest,
+    request: Request,
+) -> dict[str, object]:
+    intake_result = _create_or_replay_intake(payload.intake)
+    incident = intake_result["incident"]
+    investigation = investigate(
+        InvestigationRequest(
+            incident_id=str(incident["id"]),
+            query=payload.query,
+            collection_ids=payload.collection_ids,
+            max_steps=payload.max_steps,
+            max_completion_tokens=payload.max_completion_tokens,
+        ),
+        request,
+    )
+    return {
+        "intake": intake_result["intake"],
+        "intake_record": intake_result["record"],
+        "incident": incident,
+        "investigation": investigation,
+    }
 
 
 @app.get("/v1/incidents/{incident_id}")

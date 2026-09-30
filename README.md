@@ -101,6 +101,8 @@ curl -X POST http://localhost:8000/v1/incidents/intake \
 
 The intake accepts structured metric values, log objects, and deployment objects, normalizes them into immutable observations, and returns the incident ID for `/v1/investigations`. It always creates an ungraded live incident; payloads containing an oracle are rejected. Retrying the identical payload is safe and returns the original record with `status: replayed`; reusing the ID with changed observations returns HTTP `409`.
 
+For alert automation, `POST /v1/incidents/intake/investigate` accepts the same envelope under `intake` plus optional `query`, `collection_ids`, and execution budgets. It creates or replays the incident, runs the same bounded agent path, persists the run, and returns both records in one response. If model inference is unavailable, the validated incident remains stored and the identical request can be retried safely.
+
 Choose **Live investigation** for active troubleshooting: no known root cause is required, only the connected model can run it, and exports contain evidence without a scorecard. Choose **Evaluation scenario** when you have a reviewed answer key and want control runs, scorecards, comparisons, and suite metrics.
 
 Each run can use its own investigation question. RootSignal stores that question with the immutable run, exposes query drift in comparisons, and rejects credential-like content before model execution or persistence.
