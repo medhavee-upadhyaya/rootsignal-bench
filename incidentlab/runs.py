@@ -14,6 +14,10 @@ ReviewVerdict = Literal["accepted", "rejected", "needs_investigation"]
 ReviewFilter = Literal["accepted", "rejected", "needs_investigation", "unreviewed"]
 
 
+class WorkflowConflictError(ValueError):
+    """Raised when a workflow idempotency key cannot be safely reused."""
+
+
 class RunStore:
     """Durable experiment records stored as immutable JSON snapshots."""
 
@@ -65,7 +69,55 @@ class RunStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_run_reviews_run
                     ON run_reviews(run_id, created_at, review_id);
+                CREATE TABLE IF NOT EXISTS workflow_requests (
+                    workflow_id TEXT PRIMARY KEY,
+                    request_sha256 TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    run_id TEXT,
+                    FOREIGN KEY(run_id) REFERENCES experiment_runs(run_id)
+                );
                 """
+            )
+
+    def claim_workflow(self, workflow_id: str, request_sha256: str) -> dict[str, str]:
+        created_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with self._connect() as connection:
+            try:
+                connection.execute(
+                    "INSERT INTO workflow_requests VALUES (?, ?, ?, NULL)",
+                    (workflow_id, request_sha256, created_at),
+                )
+                return {"status": "claimed", "created_at": created_at}
+            except sqlite3.IntegrityError:
+                row = connection.execute(
+                    "SELECT request_sha256, created_at, run_id FROM workflow_requests WHERE workflow_id = ?",
+                    (workflow_id,),
+                ).fetchone()
+                if row is None or row["request_sha256"] != request_sha256:
+                    raise WorkflowConflictError(
+                        "Workflow id already exists with different inputs"
+                    )
+                if row["run_id"] is None:
+                    return {"status": "in_progress", "created_at": str(row["created_at"])}
+                return {
+                    "status": "completed", "created_at": str(row["created_at"]),
+                    "run_id": str(row["run_id"]),
+                }
+
+    def complete_workflow(self, workflow_id: str, run_id: str) -> None:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE workflow_requests SET run_id = ? WHERE workflow_id = ? AND run_id IS NULL",
+                (run_id, workflow_id),
+            )
+        if cursor.rowcount != 1:
+            raise WorkflowConflictError("Workflow request is not pending")
+
+    def release_workflow(self, workflow_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM workflow_requests WHERE workflow_id = ? AND run_id IS NULL",
+                (workflow_id,),
             )
 
     def save(

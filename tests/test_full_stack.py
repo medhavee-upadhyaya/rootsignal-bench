@@ -72,6 +72,7 @@ class FullStackInvestigationTests(unittest.TestCase):
     def test_one_call_telemetry_workflow_persists_incident_and_model_run(self) -> None:
         incident_id = f"alert-{uuid.uuid4().hex}"
         payload = {
+            "workflow_id": f"workflow-{uuid.uuid4().hex}",
             "intake": {
                 "id": incident_id,
                 "title": "Checkout alert",
@@ -93,7 +94,8 @@ class FullStackInvestigationTests(unittest.TestCase):
             )
 
         self.assertEqual(status, 200)
-        self.assertEqual(result["workflow"], {"status": "completed", "retryable": False})
+        self.assertEqual(result["workflow"]["status"], "completed")
+        self.assertFalse(result["workflow"]["replayed"])
         self.assertEqual(result["intake"]["status"], "created")
         self.assertEqual(result["incident"]["id"], incident_id)
         run_id = result["investigation"]["record"]["run_id"]
@@ -111,11 +113,21 @@ class FullStackInvestigationTests(unittest.TestCase):
         self.assertEqual(retry_status, 200)
         self.assertEqual(retry["intake"]["status"], "replayed")
         self.assertEqual(retry["intake_record"]["created_at"], result["intake_record"]["created_at"])
-        self.assertNotEqual(retry["investigation"]["record"]["run_id"], run_id)
+        self.assertTrue(retry["workflow"]["replayed"])
+        self.assertEqual(retry["investigation"]["record"]["run_id"], run_id)
+
+        changed = json.loads(json.dumps(payload))
+        changed["query"] = "Investigate a materially different question"
+        conflict_status, _, conflict = asgi_request(
+            "POST", "/v1/incidents/intake/investigate", body=changed
+        )
+        self.assertEqual(conflict_status, 409)
+        self.assertIn("different inputs", conflict["error"]["message"])
 
     def test_one_call_workflow_reports_persisted_intake_when_inference_is_down(self) -> None:
         incident_id = f"outage-{uuid.uuid4().hex}"
         payload = {
+            "workflow_id": f"workflow-{uuid.uuid4().hex}",
             "intake": {
                 "id": incident_id,
                 "title": "Payments alert",

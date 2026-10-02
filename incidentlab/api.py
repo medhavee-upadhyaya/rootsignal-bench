@@ -30,7 +30,7 @@ from .llm import OllamaClient
 from .models import Incident
 from .observability import METRICS, log_event, trace_span
 from .rag_agent import GroundedAgent
-from .runs import ExecutionMode, RunStore
+from .runs import ExecutionMode, RunStore, WorkflowConflictError
 from .secrets import SensitiveContentError, reject_secrets
 from .suites import build_suite
 
@@ -168,6 +168,7 @@ class InvestigationRequest(BaseModel):
 
 class TelemetryInvestigationRequest(BaseModel):
     intake: dict[str, object]
+    workflow_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._-]{8,128}$")
     query: str | None = Field(default=None, min_length=3, max_length=2000)
     collection_ids: list[str] = Field(
         default_factory=lambda: ["incident-runbooks"], min_length=1, max_length=10
@@ -472,6 +473,46 @@ def intake_and_investigate(
 ) -> Any:
     intake_result = _create_or_replay_intake(payload.intake)
     incident = intake_result["incident"]
+    workflow_digest = hashlib.sha256(
+        json.dumps(
+            {
+                "intake": payload.intake,
+                "query": payload.query,
+                "collection_ids": payload.collection_ids,
+                "max_steps": payload.max_steps,
+                "max_completion_tokens": payload.max_completion_tokens,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    if payload.workflow_id:
+        try:
+            claim = RUNS.claim_workflow(payload.workflow_id, workflow_digest)
+        except WorkflowConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if claim["status"] == "in_progress":
+            raise HTTPException(status_code=409, detail="Workflow request is already in progress")
+        if claim["status"] == "completed":
+            stored = RUNS.get(claim["run_id"])
+            if stored is None:
+                raise HTTPException(status_code=409, detail="Workflow run is unavailable")
+            restored = dict(stored["result"])
+            restored["record"] = {
+                "run_id": stored["run_id"],
+                "created_at": stored["created_at"],
+                "mode": stored["mode"],
+            }
+            return {
+                "workflow": {
+                    "status": "completed", "retryable": False,
+                    "workflow_id": payload.workflow_id, "replayed": True,
+                },
+                "intake": intake_result["intake"],
+                "intake_record": intake_result["record"],
+                "incident": incident,
+                "investigation": restored,
+            }
     try:
         investigation = investigate(
             InvestigationRequest(
@@ -484,6 +525,8 @@ def intake_and_investigate(
             request,
         )
     except HTTPException as exc:
+        if payload.workflow_id:
+            RUNS.release_workflow(payload.workflow_id)
         if exc.status_code != 503:
             raise
         correlation_id = getattr(request.state, "request_id", request_id(None))
@@ -498,6 +541,8 @@ def intake_and_investigate(
                 "workflow": {
                     "status": "intake_persisted",
                     "retryable": True,
+                    "workflow_id": payload.workflow_id,
+                    "replayed": False,
                     "retry": {"method": "POST", "path": "/v1/incidents/intake/investigate"},
                 },
                 "intake": intake_result["intake"],
@@ -505,8 +550,13 @@ def intake_and_investigate(
                 "incident": incident,
             },
         )
+    if payload.workflow_id:
+        RUNS.complete_workflow(payload.workflow_id, str(investigation["record"]["run_id"]))
     return {
-        "workflow": {"status": "completed", "retryable": False},
+        "workflow": {
+            "status": "completed", "retryable": False,
+            "workflow_id": payload.workflow_id, "replayed": False,
+        },
         "intake": intake_result["intake"],
         "intake_record": intake_result["record"],
         "incident": incident,

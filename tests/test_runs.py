@@ -4,10 +4,39 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from incidentlab.runs import RunStore
+from incidentlab.runs import RunStore, WorkflowConflictError
 
 
 class RunStoreTests(unittest.TestCase):
+    def test_workflow_claim_is_persistent_and_input_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runs.db"
+            store = RunStore(path)
+            claimed = store.claim_workflow("alert-request-001", "a" * 64)
+            self.assertEqual(claimed["status"], "claimed")
+            self.assertEqual(
+                RunStore(path).claim_workflow("alert-request-001", "a" * 64)["status"],
+                "in_progress",
+            )
+            with self.assertRaisesRegex(WorkflowConflictError, "different inputs"):
+                store.claim_workflow("alert-request-001", "b" * 64)
+
+            run = store.save(
+                incident_id="checkout", incident_title="Checkout", mode="model",
+                model="test", query="Investigate", fixture_sha256="a" * 64,
+                result={}, metadata={},
+            )
+            store.complete_workflow("alert-request-001", run["run_id"])
+            completed = RunStore(path).claim_workflow("alert-request-001", "a" * 64)
+            self.assertEqual(completed["status"], "completed")
+            self.assertEqual(completed["run_id"], run["run_id"])
+
+            store.claim_workflow("retryable-request", "c" * 64)
+            store.release_workflow("retryable-request")
+            self.assertEqual(
+                store.claim_workflow("retryable-request", "c" * 64)["status"], "claimed"
+            )
+
     def test_run_survives_store_reopen_and_preserves_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "runs.db"
