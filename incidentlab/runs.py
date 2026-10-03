@@ -5,7 +5,7 @@ import sqlite3
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -79,8 +79,16 @@ class RunStore:
                 """
             )
 
-    def claim_workflow(self, workflow_id: str, request_sha256: str) -> dict[str, str]:
-        created_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    def claim_workflow(
+        self,
+        workflow_id: str,
+        request_sha256: str,
+        *,
+        lease_seconds: int = 900,
+        now: datetime | None = None,
+    ) -> dict[str, str]:
+        claimed_at = now or datetime.now(UTC)
+        created_at = claimed_at.isoformat(timespec="milliseconds").replace("+00:00", "Z")
         with self._connect() as connection:
             try:
                 connection.execute(
@@ -98,11 +106,42 @@ class RunStore:
                         "Workflow id already exists with different inputs"
                     )
                 if row["run_id"] is None:
+                    previous_claim = datetime.fromisoformat(
+                        str(row["created_at"]).replace("Z", "+00:00")
+                    )
+                    if claimed_at >= previous_claim + timedelta(seconds=lease_seconds):
+                        cursor = connection.execute(
+                            """
+                            UPDATE workflow_requests SET created_at = ?
+                            WHERE workflow_id = ? AND request_sha256 = ?
+                                AND created_at = ? AND run_id IS NULL
+                            """,
+                            (created_at, workflow_id, request_sha256, row["created_at"]),
+                        )
+                        if cursor.rowcount == 1:
+                            return {"status": "reclaimed", "created_at": created_at}
                     return {"status": "in_progress", "created_at": str(row["created_at"])}
                 return {
                     "status": "completed", "created_at": str(row["created_at"]),
                     "run_id": str(row["run_id"]),
                 }
+
+    def get_workflow(self, workflow_id: str) -> dict[str, str] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT created_at, run_id FROM workflow_requests WHERE workflow_id = ?",
+                (workflow_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        result = {
+            "workflow_id": workflow_id,
+            "status": "completed" if row["run_id"] else "in_progress",
+            "created_at": str(row["created_at"]),
+        }
+        if row["run_id"]:
+            result["run_id"] = str(row["run_id"])
+        return result
 
     def complete_workflow(self, workflow_id: str, run_id: str) -> None:
         with self._connect() as connection:

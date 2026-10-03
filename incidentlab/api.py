@@ -50,6 +50,7 @@ RATE_LIMITER = RateLimiter(
     limit=int(os.getenv("ROOTSIGNAL_RATE_LIMIT", "60")),
     window_seconds=float(os.getenv("ROOTSIGNAL_RATE_WINDOW_SECONDS", "60")),
 )
+WORKFLOW_LEASE_SECONDS = max(120, int(os.getenv("ROOTSIGNAL_WORKFLOW_LEASE_SECONDS", "900")))
 AUTHORIZER = ApiKeyAuthorizer(os.getenv("ROOTSIGNAL_API_KEYS", ""))
 RATE_LIMITED_PATHS = {
     "/v1/investigations",
@@ -60,6 +61,7 @@ RATE_LIMITED_PATHS = {
     "/v1/incidents",
     "/v1/evaluation-suites",
     "/v1/runs",
+    "/v1/workflows",
 }
 PUBLIC_AUTH_PATHS = {"/healthz", "/readyz", "/v1/system", "/v1/benchmarks/latest"}
 
@@ -195,6 +197,7 @@ class ComparisonRequest(BaseModel):
 
 
 RunId = Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")]
+WorkflowId = Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{8,128}$")]
 
 
 class EvaluationSuiteRequest(BaseModel):
@@ -488,7 +491,11 @@ def intake_and_investigate(
     ).hexdigest()
     if payload.workflow_id:
         try:
-            claim = RUNS.claim_workflow(payload.workflow_id, workflow_digest)
+            claim = RUNS.claim_workflow(
+                payload.workflow_id,
+                workflow_digest,
+                lease_seconds=WORKFLOW_LEASE_SECONDS,
+            )
         except WorkflowConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         if claim["status"] == "in_progress":
@@ -507,6 +514,7 @@ def intake_and_investigate(
                 "workflow": {
                     "status": "completed", "retryable": False,
                     "workflow_id": payload.workflow_id, "replayed": True,
+                    "status_url": f"/v1/workflows/{payload.workflow_id}",
                 },
                 "intake": intake_result["intake"],
                 "intake_record": intake_result["record"],
@@ -543,6 +551,7 @@ def intake_and_investigate(
                     "retryable": True,
                     "workflow_id": payload.workflow_id,
                     "replayed": False,
+                    "status_url": f"/v1/workflows/{payload.workflow_id}" if payload.workflow_id else None,
                     "retry": {"method": "POST", "path": "/v1/incidents/intake/investigate"},
                 },
                 "intake": intake_result["intake"],
@@ -556,12 +565,21 @@ def intake_and_investigate(
         "workflow": {
             "status": "completed", "retryable": False,
             "workflow_id": payload.workflow_id, "replayed": False,
+            "status_url": f"/v1/workflows/{payload.workflow_id}" if payload.workflow_id else None,
         },
         "intake": intake_result["intake"],
         "intake_record": intake_result["record"],
         "incident": incident,
         "investigation": investigation,
     }
+
+
+@app.get("/v1/workflows/{workflow_id}")
+def workflow_status(workflow_id: WorkflowId) -> dict[str, str]:
+    workflow = RUNS.get_workflow(workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=404, detail="Unknown workflow")
+    return workflow
 
 
 @app.get("/v1/incidents/{incident_id}")

@@ -96,6 +96,11 @@ class FullStackInvestigationTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(result["workflow"]["status"], "completed")
         self.assertFalse(result["workflow"]["replayed"])
+        workflow_status, _, workflow = asgi_request(
+            "GET", result["workflow"]["status_url"]
+        )
+        self.assertEqual(workflow_status, 200)
+        self.assertEqual(workflow["status"], "completed")
         self.assertEqual(result["intake"]["status"], "created")
         self.assertEqual(result["incident"]["id"], incident_id)
         run_id = result["investigation"]["record"]["run_id"]
@@ -115,6 +120,7 @@ class FullStackInvestigationTests(unittest.TestCase):
         self.assertEqual(retry["intake_record"]["created_at"], result["intake_record"]["created_at"])
         self.assertTrue(retry["workflow"]["replayed"])
         self.assertEqual(retry["investigation"]["record"]["run_id"], run_id)
+        self.assertEqual(workflow["run_id"], run_id)
 
         changed = json.loads(json.dumps(payload))
         changed["query"] = "Investigate a materially different question"

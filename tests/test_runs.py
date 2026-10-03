@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from incidentlab.runs import RunStore, WorkflowConflictError
@@ -30,12 +31,31 @@ class RunStoreTests(unittest.TestCase):
             completed = RunStore(path).claim_workflow("alert-request-001", "a" * 64)
             self.assertEqual(completed["status"], "completed")
             self.assertEqual(completed["run_id"], run["run_id"])
+            self.assertEqual(store.get_workflow("alert-request-001")["status"], "completed")
 
             store.claim_workflow("retryable-request", "c" * 64)
             store.release_workflow("retryable-request")
             self.assertEqual(
                 store.claim_workflow("retryable-request", "c" * 64)["status"], "claimed"
             )
+
+    def test_stale_workflow_claim_can_be_recovered_after_lease(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = RunStore(Path(directory) / "runs.db")
+            started = datetime(2026, 1, 1, tzinfo=UTC)
+            store.claim_workflow("stale-request-001", "d" * 64, now=started)
+
+            active = store.claim_workflow(
+                "stale-request-001", "d" * 64,
+                lease_seconds=900, now=started + timedelta(seconds=899),
+            )
+            self.assertEqual(active["status"], "in_progress")
+            reclaimed = store.claim_workflow(
+                "stale-request-001", "d" * 64,
+                lease_seconds=900, now=started + timedelta(seconds=900),
+            )
+            self.assertEqual(reclaimed["status"], "reclaimed")
+            self.assertEqual(store.get_workflow("stale-request-001")["status"], "in_progress")
 
     def test_run_survives_store_reopen_and_preserves_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
