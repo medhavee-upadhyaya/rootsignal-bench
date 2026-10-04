@@ -76,8 +76,118 @@ class RunStore:
                     run_id TEXT,
                     FOREIGN KEY(run_id) REFERENCES experiment_runs(run_id)
                 );
+                CREATE TABLE IF NOT EXISTS integration_jobs (
+                    job_id TEXT PRIMARY KEY,
+                    request_sha256 TEXT NOT NULL,
+                    request_json TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed')),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    run_id TEXT,
+                    error_code TEXT,
+                    FOREIGN KEY(run_id) REFERENCES experiment_runs(run_id)
+                );
                 """
             )
+            job_columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(integration_jobs)")
+            }
+            if "request_json" not in job_columns:
+                connection.execute(
+                    "ALTER TABLE integration_jobs ADD COLUMN request_json TEXT NOT NULL DEFAULT '{}'"
+                )
+
+    def enqueue_job(
+        self, job_id: str, request_sha256: str, request_payload: dict[str, Any]
+    ) -> dict[str, str]:
+        created_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO integration_jobs(
+                    job_id, request_sha256, request_json, status, created_at, updated_at
+                ) VALUES (?, ?, ?, 'queued', ?, ?)
+                """,
+                (
+                    job_id,
+                    request_sha256,
+                    json.dumps(request_payload, sort_keys=True, separators=(",", ":")),
+                    created_at,
+                    created_at,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM integration_jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        assert row is not None
+        if row["request_sha256"] != request_sha256:
+            raise WorkflowConflictError("Integration job id already has different inputs")
+        return self._job_record(row)
+
+    def get_job_request(self, job_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT request_json FROM integration_jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        return json.loads(row["request_json"]) if row is not None else None
+
+    def claim_job(self, job_id: str, *, lease_seconds: int = 900) -> bool:
+        now = datetime.now(UTC)
+        updated_at = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT status, updated_at FROM integration_jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+            if row is None or row["status"] == "completed":
+                return False
+            stale = row["status"] == "running" and now >= datetime.fromisoformat(
+                str(row["updated_at"]).replace("Z", "+00:00")
+            ) + timedelta(seconds=lease_seconds)
+            if row["status"] not in {"queued", "failed"} and not stale:
+                return False
+            cursor = connection.execute(
+                """
+                UPDATE integration_jobs SET status = 'running', updated_at = ?, error_code = NULL
+                WHERE job_id = ? AND status = ? AND updated_at = ?
+                """,
+                (updated_at, job_id, row["status"], row["updated_at"]),
+            )
+            return cursor.rowcount == 1
+
+    def finish_job(self, job_id: str, *, run_id: str | None, error_code: str | None = None) -> None:
+        status = "completed" if run_id else "failed"
+        updated_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE integration_jobs
+                SET status = ?, updated_at = ?, run_id = ?, error_code = ?
+                WHERE job_id = ? AND status = 'running'
+                """,
+                (status, updated_at, run_id, error_code, job_id),
+            )
+
+    def get_job(self, job_id: str) -> dict[str, str] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM integration_jobs WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        return self._job_record(row) if row is not None else None
+
+    @staticmethod
+    def _job_record(row: sqlite3.Row) -> dict[str, str]:
+        result = {
+            "job_id": str(row["job_id"]),
+            "status": str(row["status"]),
+            "created_at": str(row["created_at"]),
+            "updated_at": str(row["updated_at"]),
+        }
+        if row["run_id"]:
+            result["run_id"] = str(row["run_id"])
+        if row["error_code"]:
+            result["error_code"] = str(row["error_code"])
+        return result
 
     def claim_workflow(
         self,

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 try:
-    from fastapi import FastAPI, HTTPException, Request, Response
+    from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
     from fastapi.exceptions import RequestValidationError
     from fastapi.responses import JSONResponse, StreamingResponse
     from pydantic import BaseModel, Field
@@ -21,7 +21,7 @@ except ImportError as exc:  # pragma: no cover
 from .agent import Investigator
 from .alertmanager import normalize_alertmanager_webhook
 from .comparison import compare_runs
-from .custom_incidents import CustomIncidentStore, IncidentConflictError
+from .custom_incidents import MAX_FIXTURE_BYTES, CustomIncidentStore, IncidentConflictError
 from .evidence_bundle import build_evidence_bundle
 from .fixtures import load_incident
 from .http import ApiKeyAuthorizer, RateLimiter, request_id
@@ -64,6 +64,7 @@ RATE_LIMITED_PATHS = {
     "/v1/runs",
     "/v1/workflows",
     "/v1/integrations/alertmanager",
+    "/v1/integration-jobs",
 }
 PUBLIC_AUTH_PATHS = {"/healthz", "/readyz", "/v1/system", "/v1/benchmarks/latest"}
 
@@ -583,6 +584,83 @@ def investigate_alertmanager(payload: dict[str, object], request: Request) -> An
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return intake_and_investigate(TelemetryInvestigationRequest(**normalized), request)
+
+
+def _run_alertmanager_job(job_id: str, normalized: dict[str, object], request: Request) -> None:
+    if not RUNS.claim_job(job_id, lease_seconds=WORKFLOW_LEASE_SECONDS):
+        return
+    try:
+        result = intake_and_investigate(TelemetryInvestigationRequest(**normalized), request)
+        if isinstance(result, JSONResponse):
+            RUNS.finish_job(job_id, run_id=None, error_code="investigation_unavailable")
+            return
+        run_id = str(result["investigation"]["record"]["run_id"])
+        RUNS.finish_job(job_id, run_id=run_id)
+    except Exception:
+        LOGGER.exception("Alertmanager job failed job_id=%s", job_id)
+        RUNS.finish_job(job_id, run_id=None, error_code="processing_failed")
+
+
+@app.post("/v1/integrations/alertmanager", status_code=202)
+def enqueue_alertmanager(
+    payload: dict[str, object], request: Request, background_tasks: BackgroundTasks
+) -> dict[str, object]:
+    try:
+        normalized = normalize_alertmanager_webhook(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    job_id = str(normalized["workflow_id"])
+    serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    if len(serialized.encode()) > MAX_FIXTURE_BYTES:
+        raise HTTPException(status_code=422, detail="Alertmanager job must not exceed 1 MB")
+    try:
+        reject_secrets(serialized)
+    except SensitiveContentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    request_digest = hashlib.sha256(serialized.encode()).hexdigest()
+    job = RUNS.enqueue_job(job_id, request_digest, normalized)
+    background_tasks.add_task(_run_alertmanager_job, job_id, normalized, request)
+    return {**job, "status_url": f"/v1/integration-jobs/{job_id}"}
+
+
+@app.get("/v1/integration-jobs/{job_id}")
+def integration_job(job_id: WorkflowId) -> dict[str, str]:
+    job = RUNS.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown integration job")
+    return job
+
+
+@app.post("/v1/integration-jobs/{job_id}/resume", status_code=202)
+def resume_integration_job(
+    job_id: WorkflowId, request: Request, background_tasks: BackgroundTasks
+) -> dict[str, str]:
+    job = RUNS.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown integration job")
+    if job["status"] not in {"queued", "running"}:
+        raise HTTPException(status_code=409, detail="Only interrupted integration jobs can resume")
+    normalized = RUNS.get_job_request(job_id)
+    if normalized is None:
+        raise HTTPException(status_code=409, detail="Integration job input is unavailable")
+    background_tasks.add_task(_run_alertmanager_job, job_id, normalized, request)
+    return {**job, "status_url": f"/v1/integration-jobs/{job_id}"}
+
+
+@app.post("/v1/integration-jobs/{job_id}/retry", status_code=202)
+def retry_integration_job(
+    job_id: WorkflowId, request: Request, background_tasks: BackgroundTasks
+) -> dict[str, str]:
+    job = RUNS.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown integration job")
+    if job["status"] != "failed":
+        raise HTTPException(status_code=409, detail="Only failed integration jobs can be retried")
+    normalized = RUNS.get_job_request(job_id)
+    if normalized is None:
+        raise HTTPException(status_code=409, detail="Integration job input is unavailable")
+    background_tasks.add_task(_run_alertmanager_job, job_id, normalized, request)
+    return {**job, "status_url": f"/v1/integration-jobs/{job_id}"}
 
 
 @app.get("/v1/workflows/{workflow_id}")

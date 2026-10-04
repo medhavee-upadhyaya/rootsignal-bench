@@ -99,6 +99,65 @@ class FullStackInvestigationTests(unittest.TestCase):
         self.assertEqual(result["incident"]["metadata"]["failure_class"], "alertmanager-alert")
         self.assertEqual(result["investigation"]["record"]["mode"], "model")
 
+        async_payload = json.loads(json.dumps(payload))
+        async_payload["alerts"][0]["fingerprint"] = uuid.uuid4().hex
+        async_provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=async_provider.urlopen):
+            queued_status, _, queued = asgi_request(
+                "POST", "/v1/integrations/alertmanager", body=async_payload
+            )
+        self.assertEqual(queued_status, 202)
+        job_status, _, job = asgi_request("GET", queued["status_url"])
+        self.assertEqual(job_status, 200)
+        self.assertEqual(job["status"], "completed")
+        self.assertRegex(job["run_id"], r"^[a-f0-9]{32}$")
+
+    def test_alertmanager_job_retries_safely_after_model_outage(self) -> None:
+        payload = {
+            "receiver": "platform-oncall",
+            "commonLabels": {"alertname": "PaymentsErrors"},
+            "commonAnnotations": {"summary": "Payments are failing"},
+            "alerts": [{
+                "status": "firing",
+                "labels": {"service": "payments", "version": "4.2.0"},
+                "annotations": {"description": "upstream requests time out"},
+                "fingerprint": uuid.uuid4().hex,
+            }],
+        }
+        with self.assertLogs("rootsignal.api", level="WARNING"):
+            with patch(
+                "incidentlab.llm.urllib.request.urlopen",
+                side_effect=urllib.error.URLError("provider unavailable"),
+            ):
+                status, _, queued = asgi_request(
+                    "POST", "/v1/integrations/alertmanager", body=payload
+                )
+        self.assertEqual(status, 202)
+        _, _, failed = asgi_request("GET", queued["status_url"])
+        self.assertEqual(failed["status"], "failed")
+        self.assertNotIn("provider unavailable", json.dumps(failed))
+
+        provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):
+            retry_status, _, _ = asgi_request(
+                "POST", f"{queued['status_url']}/retry"
+            )
+        self.assertEqual(retry_status, 202)
+        _, _, completed = asgi_request("GET", queued["status_url"])
+        self.assertEqual(completed["status"], "completed")
+        self.assertRegex(completed["run_id"], r"^[a-f0-9]{32}$")
+
+        secret_payload = json.loads(json.dumps(payload))
+        secret_payload["alerts"][0]["fingerprint"] = uuid.uuid4().hex
+        secret_payload["alerts"][0]["annotations"]["token"] = (
+            "ghp_" + "abcdefghijklmnopqrstuvwxyz1234567890"
+        )
+        rejected_status, _, rejected = asgi_request(
+            "POST", "/v1/integrations/alertmanager", body=secret_payload
+        )
+        self.assertEqual(rejected_status, 422)
+        self.assertNotIn("ghp_", json.dumps(rejected))
+
     def test_one_call_telemetry_workflow_persists_incident_and_model_run(self) -> None:
         incident_id = f"alert-{uuid.uuid4().hex}"
         payload = {

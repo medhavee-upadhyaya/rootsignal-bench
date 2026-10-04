@@ -9,6 +9,34 @@ from incidentlab.runs import RunStore, WorkflowConflictError
 
 
 class RunStoreTests(unittest.TestCase):
+    def test_integration_jobs_are_durable_and_retryable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "runs.db"
+            store = RunStore(path)
+            request_payload = {"workflow_id": "alertmanager-job-001", "intake": {}}
+            queued = store.enqueue_job("alertmanager-job-001", "a" * 64, request_payload)
+            self.assertEqual(queued["status"], "queued")
+            self.assertEqual(store.get_job_request("alertmanager-job-001"), request_payload)
+            self.assertTrue(store.claim_job("alertmanager-job-001"))
+            self.assertFalse(store.claim_job("alertmanager-job-001"))
+            store.finish_job(
+                "alertmanager-job-001", run_id=None, error_code="investigation_unavailable"
+            )
+            self.assertEqual(RunStore(path).get_job("alertmanager-job-001")["status"], "failed")
+            self.assertTrue(store.claim_job("alertmanager-job-001"))
+
+            run = store.save(
+                incident_id="checkout", incident_title="Checkout", mode="model",
+                model="test", query="Investigate", fixture_sha256="a" * 64,
+                result={}, metadata={},
+            )
+            store.finish_job("alertmanager-job-001", run_id=run["run_id"])
+            completed = store.enqueue_job(
+                "alertmanager-job-001", "a" * 64, request_payload
+            )
+            self.assertEqual(completed["status"], "completed")
+            self.assertEqual(completed["run_id"], run["run_id"])
+
     def test_workflow_claim_is_persistent_and_input_bound(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "runs.db"
