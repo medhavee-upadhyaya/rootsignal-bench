@@ -111,6 +111,8 @@ test("explains the external telemetry intake workflow in product", async () => {
   assert.match(page, /COMPOSABLE API/);
   assert.match(page, /Copy complete workflow/);
   assert.match(page, /workflow_id makes completed retries return the original run/);
+  assert.match(page, /\/v1\/integrations\/alertmanager\/investigate/);
+  assert.match(page, /native Prometheus Alertmanager webhook body/);
   assert.match(page, /HTTP 409/);
 });
 

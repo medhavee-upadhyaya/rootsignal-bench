@@ -69,6 +69,36 @@ class OpenAIProvider:
 
 @unittest.skipIf(METRICS is None, "API dependencies are not installed")
 class FullStackInvestigationTests(unittest.TestCase):
+    def test_alertmanager_webhook_runs_the_real_investigation_workflow(self) -> None:
+        payload = {
+            "receiver": "platform-oncall",
+            "status": "firing",
+            "groupLabels": {"service": "checkout"},
+            "commonLabels": {"alertname": "CheckoutLatencyHigh", "service": "checkout"},
+            "commonAnnotations": {
+                "summary": "Checkout latency is high",
+                "description": "p95 increased after checkout-api v1.8.3",
+            },
+            "alerts": [{
+                "status": "firing",
+                "labels": {"service": "checkout", "version": "1.8.3"},
+                "annotations": {"description": "database pool wait exceeded"},
+                "startsAt": "2026-10-03T12:00:00Z",
+                "fingerprint": uuid.uuid4().hex,
+            }],
+        }
+        provider = OpenAIProvider()
+        with patch("incidentlab.llm.urllib.request.urlopen", side_effect=provider.urlopen):
+            status, _, result = asgi_request(
+                "POST", "/v1/integrations/alertmanager/investigate", body=payload
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(result["workflow"]["status"], "completed")
+        self.assertTrue(result["workflow"]["workflow_id"].startswith("alertmanager-"))
+        self.assertEqual(result["incident"]["metadata"]["failure_class"], "alertmanager-alert")
+        self.assertEqual(result["investigation"]["record"]["mode"], "model")
+
     def test_one_call_telemetry_workflow_persists_incident_and_model_run(self) -> None:
         incident_id = f"alert-{uuid.uuid4().hex}"
         payload = {

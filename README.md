@@ -17,7 +17,7 @@ The working application uses a persistent SQLite FTS5 knowledge base, read-only 
 
 **Built for:** LLM systems engineers comparing agent architectures, SRE and platform teams prototyping evidence-grounded incident response, and researchers who need reproducible tool-use evaluation instead of one-off demos.
 
-[Quickstart](#five-minute-quickstart) · [Measured results](docs/RESULTS.md) · [Benchmark contract](docs/BENCHMARK.md) · [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Releasing](docs/RELEASING.md) · [Contributing](CONTRIBUTING.md)
+[Quickstart](#five-minute-quickstart) · [Integrations](docs/INTEGRATIONS.md) · [Measured results](docs/RESULTS.md) · [Benchmark contract](docs/BENCHMARK.md) · [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Releasing](docs/RELEASING.md) · [Contributing](CONTRIBUTING.md)
 
 ![RootSignal product overview](web/public/og.png)
 
@@ -102,6 +102,8 @@ curl -X POST http://localhost:8000/v1/incidents/intake \
 The intake accepts structured metric values, log objects, and deployment objects, normalizes them into immutable observations, and returns the incident ID for `/v1/investigations`. It always creates an ungraded live incident; payloads containing an oracle are rejected. Retrying the identical payload is safe and returns the original record with `status: replayed`; reusing the ID with changed observations returns HTTP `409`.
 
 For alert automation, `POST /v1/incidents/intake/investigate` accepts the same envelope under `intake` plus optional `query`, `collection_ids`, execution budgets, and `workflow_id`. A workflow ID binds the canonical request to its completed run: identical retries return that run without another model call, while changed inputs return HTTP `409`. Responses include a `status_url` that reports `in_progress` or the completed `run_id`, allowing webhook clients to reconcile a lost response. If model inference is unavailable, HTTP `503` returns `workflow.status: intake_persisted`, releases the workflow claim for retry, and never exposes provider details. After a process failure, an unfinished claim becomes retryable when its configurable 15-minute lease expires (`ROOTSIGNAL_WORKFLOW_LEASE_SECONDS`, minimum 120 seconds).
+
+Prometheus Alertmanager can send its native webhook payload directly to `POST /v1/integrations/alertmanager/investigate`. RootSignal preserves the alert evidence, creates an ungraded live incident, and applies the same authenticated, idempotent investigation path. See [the integration guide](docs/INTEGRATIONS.md).
 
 Choose **Live investigation** for active troubleshooting: no known root cause is required, only the connected model can run it, and exports contain evidence without a scorecard. Choose **Evaluation scenario** when you have a reviewed answer key and want control runs, scorecards, comparisons, and suite metrics.
 

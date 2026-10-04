@@ -19,6 +19,7 @@ except ImportError as exc:  # pragma: no cover
     raise RuntimeError("Install RootSignal with the 'api' dependency group") from exc
 
 from .agent import Investigator
+from .alertmanager import normalize_alertmanager_webhook
 from .comparison import compare_runs
 from .custom_incidents import CustomIncidentStore, IncidentConflictError
 from .evidence_bundle import build_evidence_bundle
@@ -62,6 +63,7 @@ RATE_LIMITED_PATHS = {
     "/v1/evaluation-suites",
     "/v1/runs",
     "/v1/workflows",
+    "/v1/integrations/alertmanager",
 }
 PUBLIC_AUTH_PATHS = {"/healthz", "/readyz", "/v1/system", "/v1/benchmarks/latest"}
 
@@ -572,6 +574,15 @@ def intake_and_investigate(
         "incident": incident,
         "investigation": investigation,
     }
+
+
+@app.post("/v1/integrations/alertmanager/investigate")
+def investigate_alertmanager(payload: dict[str, object], request: Request) -> Any:
+    try:
+        normalized = normalize_alertmanager_webhook(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return intake_and_investigate(TelemetryInvestigationRequest(**normalized), request)
 
 
 @app.get("/v1/workflows/{workflow_id}")
