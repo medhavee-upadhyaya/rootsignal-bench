@@ -12,6 +12,17 @@ The application is available at `http://localhost:3000`, the API at `http://loca
 
 The built-in and custom incidents, experiment history, and scoped knowledge collections share the persistent SQLite volume. Back up the volume before destructive infrastructure changes. The deterministic control remains usable when the model endpoint is offline; independent model runs require the configured endpoint.
 
+### Deploy below an existing domain path
+
+Set `ROOTSIGNAL_BASE_PATH` at web-image build time when a reverse proxy exposes the application below a prefix:
+
+```bash
+ROOTSIGNAL_BASE_PATH=/project/rootsignalbench docker compose build web
+ROOTSIGNAL_BASE_PATH=/project/rootsignalbench docker compose up
+```
+
+The build prefixes browser API calls, evidence downloads, metadata images, framework assets, and the web health check while leaving backend `/v1` routes unchanged. The value is compiled into the browser bundle, so changing only the running container environment is insufficient; rebuild the web image whenever the prefix changes. Leave it empty for root and localhost deployments.
+
 Before exposing RootSignal beyond localhost, set `ROOTSIGNAL_API_KEYS` on the API to one or more comma-separated, secret-manager-supplied values of at least 16 characters. All mutations and sensitive reads then require `Authorization: Bearer <key>`, including incident data, run history, evidence exports, knowledge metadata, and metrics. Only health, readiness, system capability, and the published benchmark summary remain public. Set `ROOTSIGNAL_API_KEY` on the web service to one of those values so the server-side web proxy can authenticate without exposing the key to browser JavaScript. Leave both variables empty only for trusted local development.
 
 Both containers run as UID 10001 with all Linux capabilities dropped, a read-only root filesystem, `no-new-privileges`, bounded temporary storage, and health checks. Only `/data` is writable for the API.

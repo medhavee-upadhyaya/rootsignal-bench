@@ -28,9 +28,12 @@ services:
   web:
     build:
       context: web
+      args:
+        ROOTSIGNAL_BASE_PATH: ${ROOTSIGNAL_BASE_PATH:-}
     environment:
       INCIDENTLAB_API_URL: http://api:8000
       ROOTSIGNAL_API_KEY: ${ROOTSIGNAL_API_KEY:-}
+      ROOTSIGNAL_BASE_PATH: ${ROOTSIGNAL_BASE_PATH:-}
     ports: ["3000:3000"]
     depends_on:
       api: {condition: service_healthy}

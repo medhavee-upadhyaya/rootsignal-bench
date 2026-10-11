@@ -5,6 +5,7 @@ import { getGuidedWorkflow, type GuidedStepId } from "@/lib/guided-workflow";
 import { findControlAgentPair } from "@/lib/run-pairing";
 import { buildReviewLink, parseReviewLink } from "@/lib/review-links";
 import { MAX_TELEMETRY_FILE_BYTES, parseTelemetryBundle } from "@/lib/telemetry-import";
+import { appPath } from "@/lib/base-path";
 
 type Evidence = { source: string; content: string; relevance: number };
 type ToolCall = { name: string; arguments: Record<string, string> };
@@ -200,8 +201,8 @@ export default function Home() {
   });
 
   useEffect(() => {
-    fetch("/api/benchmark").then((response) => response.ok ? response.json() : null).then((data) => data && setBenchmark(data)).catch(() => undefined);
-    fetch("/api/incidents")
+    fetch(appPath("/api/benchmark")).then((response) => response.ok ? response.json() : null).then((data) => data && setBenchmark(data)).catch(() => undefined);
+    fetch(appPath("/api/incidents"))
       .then(async (response) => {
         if (!response.ok) throw new Error("Incident catalog unavailable");
         return response.json();
@@ -237,7 +238,7 @@ export default function Home() {
   async function refreshSystem() {
     setSystemLoading(true);
     try {
-      const response = await fetch("/api/system", { cache: "no-store" });
+      const response = await fetch(appPath("/api/system"), { cache: "no-store" });
       if (!response.ok) throw new Error("System status unavailable");
       setSystem(await response.json());
     } catch {
@@ -259,7 +260,7 @@ export default function Home() {
 
   async function refreshCollections() {
     try {
-      const response = await fetch("/api/collections", { cache: "no-store" });
+      const response = await fetch(appPath("/api/collections"), { cache: "no-store" });
       if (!response.ok) throw new Error("Knowledge collections unavailable");
       const payload = await response.json();
       setCollections(payload.collections);
@@ -271,7 +272,7 @@ export default function Home() {
   async function createCollection() {
     setIndexStatus("Creating collection…");
     try {
-      const response = await fetch("/api/collections", {
+      const response = await fetch(appPath("/api/collections"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(newCollection),
@@ -335,14 +336,14 @@ export default function Home() {
     if (filters.mode) params.set("mode", filters.mode);
     if (filters.review) params.set("review", filters.review);
     const queryString = params.toString();
-    return `/api/runs${queryString ? `?${queryString}` : ""}`;
+    return appPath(`/api/runs${queryString ? `?${queryString}` : ""}`);
   }
 
   async function evaluateLatestSuite() {
     setSuiteLoading(true);
     setSuiteError("");
     try {
-      const response = await fetch("/api/evaluate", {
+      const response = await fetch(appPath("/api/evaluate"), {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ selection: "latest_model_run_per_incident" }),
       });
@@ -412,7 +413,7 @@ export default function Home() {
     setRunError("");
     setProgress("Starting investigation…");
     try {
-      const response = await fetch("/api/investigate", {
+      const response = await fetch(appPath("/api/investigate"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -514,7 +515,7 @@ export default function Home() {
     try {
       let detail = incidentDetail;
       if (!detail || detail.id !== selectedIncident.id) {
-        const response = await fetch(`/api/incidents?incident_id=${encodeURIComponent(selectedIncident.id)}`, { cache: "no-store" });
+        const response = await fetch(appPath(`/api/incidents?incident_id=${encodeURIComponent(selectedIncident.id)}`), { cache: "no-store" });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error?.message || "Incident observations unavailable");
         detail = payload;
@@ -538,7 +539,7 @@ export default function Home() {
   async function loadRun(runId: string, scroll = true) {
     setRunError("");
     try {
-      const response = await fetch(`/api/runs?run_id=${encodeURIComponent(runId)}`, { cache: "no-store" });
+      const response = await fetch(appPath(`/api/runs?run_id=${encodeURIComponent(runId)}`), { cache: "no-store" });
       const payload: StoredRun & { error?: { message?: string } } = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || "Could not load run");
       setSelectedIncidentId(payload.incident_id);
@@ -570,7 +571,7 @@ export default function Home() {
     setComparisonLoading(true);
     setComparisonError("");
     try {
-      const response = await fetch("/api/compare", {
+      const response = await fetch(appPath("/api/compare"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ reference_run_id: referenceId, candidate_run_id: candidateId }),
@@ -630,14 +631,14 @@ export default function Home() {
     setCreatorStatus("Validating…");
     try {
       const fixture = creatorMode === "json" ? JSON.parse(jsonFixture) : buildFixture(incidentDraft, creatorPurpose === "evaluation");
-      const response = await fetch("/api/incidents", {
+      const response = await fetch(appPath("/api/incidents"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(fixture),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || payload.detail || "Import failed");
-      const catalogResponse = await fetch("/api/incidents", { cache: "no-store" });
+      const catalogResponse = await fetch(appPath("/api/incidents"), { cache: "no-store" });
       if (!catalogResponse.ok) throw new Error("Catalog refresh failed");
       const updatedCatalog: IncidentCatalog = await catalogResponse.json();
       setCatalog(updatedCatalog);
@@ -686,10 +687,10 @@ export default function Home() {
     }
     setRunError("");
     try {
-      const response = await fetch(`/api/incidents?incident_id=${encodeURIComponent(selectedIncident.id)}`, { method: "DELETE" });
+      const response = await fetch(appPath(`/api/incidents?incident_id=${encodeURIComponent(selectedIncident.id)}`), { method: "DELETE" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || "Archival failed");
-      const catalogResponse = await fetch("/api/incidents", { cache: "no-store" });
+      const catalogResponse = await fetch(appPath("/api/incidents"), { cache: "no-store" });
       if (!catalogResponse.ok) throw new Error("Catalog refresh failed");
       const updatedCatalog: IncidentCatalog = await catalogResponse.json();
       setCatalog(updatedCatalog);
@@ -704,7 +705,7 @@ export default function Home() {
     if (!activeRun) return;
     setReviewStatus("Saving review…");
     try {
-      const response = await fetch(`/api/runs?run_id=${encodeURIComponent(activeRun.run_id)}`, {
+      const response = await fetch(appPath(`/api/runs?run_id=${encodeURIComponent(activeRun.run_id)}`), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ verdict, note: reviewNote }),
@@ -726,7 +727,7 @@ export default function Home() {
     }
     setIndexStatus("Indexing…");
     try {
-      const response = await fetch("/api/knowledge", {
+      const response = await fetch(appPath("/api/knowledge"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ collection_id: ingestCollectionId, source, text: knowledgeText }),
@@ -797,7 +798,7 @@ export default function Home() {
           })}
         </ol>
         <div className={`guided-next ${guidedWorkflow.complete ? "complete" : ""}`}>
-          {guidedWorkflow.complete ? <><strong>Evaluation complete</strong><span>You created a control, an agent run, a fair comparison, and portable evidence.</span></> : guidedWorkflow.current === "agent" && !system?.llm.healthy ? <><strong>Connect a model to continue</strong><span>{system?.llm.message || "Start the RootSignal API, then verify model readiness."}</span><button onClick={refreshSystem} disabled={systemLoading}>{systemLoading ? "Checking…" : "Recheck model"}</button></> : guidedWorkflow.current === "export" && comparison ? <><strong>Evidence is ready</strong><span>Download the signed run data and comparison scorecard.</span><a href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`} onClick={() => setGuidedExported(true)}>Export evidence ↓</a></> : <><strong>Next: {guidedWorkflow.steps.find((step) => step.id === guidedWorkflow.current)?.id}</strong><span>{guidedWorkflow.completedCount} of 6 verified steps complete.</span><button onClick={() => guidedWorkflow.current && continueGuidedWorkflow(guidedWorkflow.current)}>Continue →</button></>}
+          {guidedWorkflow.complete ? <><strong>Evaluation complete</strong><span>You created a control, an agent run, a fair comparison, and portable evidence.</span></> : guidedWorkflow.current === "agent" && !system?.llm.healthy ? <><strong>Connect a model to continue</strong><span>{system?.llm.message || "Start the RootSignal API, then verify model readiness."}</span><button onClick={refreshSystem} disabled={systemLoading}>{systemLoading ? "Checking…" : "Recheck model"}</button></> : guidedWorkflow.current === "export" && comparison ? <><strong>Evidence is ready</strong><span>Download the signed run data and comparison scorecard.</span><a href={appPath(`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`)} onClick={() => setGuidedExported(true)}>Export evidence ↓</a></> : <><strong>Next: {guidedWorkflow.steps.find((step) => step.id === guidedWorkflow.current)?.id}</strong><span>{guidedWorkflow.completedCount} of 6 verified steps complete.</span><button onClick={() => guidedWorkflow.current && continueGuidedWorkflow(guidedWorkflow.current)}>Continue →</button></>}
         </div>
       </section>
 
@@ -1013,7 +1014,7 @@ export default function Home() {
           <div><span>API / RETRIEVAL</span><code>{activeRun.metadata.api_version} · {activeRun.metadata.retrieval_engine} · {activeRun.metadata.knowledge_collections?.length ?? 0} scopes</code></div>
           <div><span>EXECUTION BUDGET</span><code>{activeRun.metadata.execution_budget?.max_steps ?? "—"} steps · {activeRun.metadata.execution_budget?.max_completion_tokens ?? "—"} tokens</code></div>
           <div><span>REQUEST ID</span><code>{activeRun.metadata.request_id}</code></div>
-          <a className="evidence-export" href={`/api/export?run_id=${encodeURIComponent(activeRun.run_id)}`}><span>PORTABLE EVIDENCE</span><strong>Export JSON ↓</strong></a>
+          <a className="evidence-export" href={appPath(`/api/export?run_id=${encodeURIComponent(activeRun.run_id)}`)}><span>PORTABLE EVIDENCE</span><strong>Export JSON ↓</strong></a>
         </section>
       )}
 
@@ -1093,7 +1094,7 @@ export default function Home() {
                 <span>CANDIDATE VERDICT</span>
                 <strong>{comparison.verdict}</strong>
                 {comparison.reasons.map((reason) => <p key={reason}>{reason}</p>)}
-                <a className="comparison-export" href={`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`} onClick={() => guidedComparisonComplete && setGuidedExported(true)}>Export verified evidence ↓</a>
+                <a className="comparison-export" href={appPath(`/api/export?run_id=${encodeURIComponent(comparison.reference.run.run_id)}&compare_to=${encodeURIComponent(comparison.candidate.run.run_id)}`)} onClick={() => guidedComparisonComplete && setGuidedExported(true)}>Export verified evidence ↓</a>
                 <button className="review-link" onClick={copyReviewLink}>{reviewLinkStatus || "Copy review link ↗"}</button>
               </div>
               <div className="comparison-table">

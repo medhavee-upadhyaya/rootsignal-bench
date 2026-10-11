@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+const configuredPath = process.env.ROOTSIGNAL_BASE_PATH?.trim() || "";
+const basePath = configuredPath && configuredPath !== "/"
+  ? `/${configuredPath.replace(/^\/+|\/+$/g, "")}`
+  : "";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -19,17 +24,17 @@ export const metadata: Metadata = {
   openGraph: {
     title: "RootSignal",
     description: "Find the cause. Show the evidence.",
-    images: [{ url: "/og.png", width: 1536, height: 905, alt: "RootSignal — Find the cause. Show the evidence." }],
+    images: [{ url: `${basePath}/og.png`, width: 1536, height: 905, alt: "RootSignal — Find the cause. Show the evidence." }],
   },
   twitter: {
     card: "summary_large_image",
     title: "RootSignal",
     description: "Find the cause. Show the evidence.",
-    images: ["/og.png"],
+    images: [`${basePath}/og.png`],
   },
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: `${basePath}/favicon.svg`,
+    shortcut: `${basePath}/favicon.svg`,
   },
 };
 
