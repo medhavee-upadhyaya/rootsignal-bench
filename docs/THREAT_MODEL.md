@@ -22,6 +22,8 @@ Knowledge documents and custom incident fixtures are screened for common private
 
 When `ROOTSIGNAL_API_KEYS` is configured, all state-changing HTTP methods and sensitive reads require a bearer key compared in constant time. Incident observations, run history, exports, knowledge metadata, and metrics are protected; health, readiness, system capability, and published benchmark metadata remain public. The web proxy reads its backend key only from the server environment. Authentication is deliberately optional for local development, so an internet-facing deployment without this variable is unsafe and unsupported.
 
+Hosted model credentials are read only from `INCIDENTLAB_LLM_API_KEY` by the API process. They are attached to requests for the single configured model origin, excluded from errors and system responses, and never supplied to the browser container. Operators must inject the value through their platform secret manager rather than Compose files, Kubernetes ConfigMaps, images, or source control.
+
 ## Explicit non-goals
 
 The reference implementation does not execute shell commands, modify infrastructure, or claim suitability for unsupervised remediation.

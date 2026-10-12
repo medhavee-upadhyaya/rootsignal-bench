@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
@@ -23,10 +24,22 @@ class ModelReadiness:
 
 
 class OpenAICompatibleClient:
-    def __init__(self, base_url: str = "http://127.0.0.1:11434", model: str = "qwen3:0.6b") -> None:
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:11434",
+        model: str = "qwen3:0.6b",
+        api_key: str | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.url = self.base_url + "/v1/chat/completions"
         self.model = model
+        self.api_key = api_key.strip() if api_key else None
+
+    def _headers(self, *, json_content: bool = False) -> dict[str, str]:
+        headers = {"content-type": "application/json"} if json_content else {}
+        if self.api_key:
+            headers["authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     def generate_json(self, system: str, user: str, max_tokens: int = 500) -> Generation:
         payload = {
@@ -42,7 +55,9 @@ class OpenAICompatibleClient:
         }
         started = time.perf_counter()
         request = urllib.request.Request(
-            self.url, data=json.dumps(payload).encode(), headers={"content-type": "application/json"}
+            self.url,
+            data=json.dumps(payload).encode(),
+            headers=self._headers(json_content=True),
         )
         with urllib.request.urlopen(request, timeout=120) as response:
             body = json.load(response)
@@ -56,7 +71,19 @@ class OpenAICompatibleClient:
 
     def probe(self) -> ModelReadiness:
         try:
-            response = urllib.request.urlopen(self.base_url + "/v1/models", timeout=2)
+            request = urllib.request.Request(
+                self.base_url + "/v1/models",
+                headers=self._headers(),
+            )
+            response = urllib.request.urlopen(request, timeout=2)
+        except urllib.error.HTTPError as exc:
+            if exc.code in {401, 403}:
+                return ModelReadiness(
+                    False,
+                    "authentication_failed",
+                    "Model server rejected its configured credential.",
+                )
+            return ModelReadiness(False, "server_error", "Model server returned an unhealthy status.")
         except Exception:
             return ModelReadiness(False, "server_unreachable", "Start the model server and verify its port.")
         try:

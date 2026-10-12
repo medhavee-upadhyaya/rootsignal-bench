@@ -2,7 +2,7 @@
 
 The working development configuration uses Qwen3 1.7B in GGUF format through llama.cpp's OpenAI-compatible server. The compact model fits laptop development constraints; it is not the leaderboard target.
 
-The local runtime and model are intentionally stored under `work/` and excluded from Git because together they exceed 500 MB. The API is configured through `INCIDENTLAB_LLM_URL` and `INCIDENTLAB_MODEL`, so hosted endpoints and vLLM can replace the laptop server without application changes.
+The local runtime and model are intentionally stored under `work/` and excluded from Git because together they exceed 500 MB. The API is configured through `INCIDENTLAB_LLM_URL` and `INCIDENTLAB_MODEL`, so hosted endpoints and vLLM can replace the laptop server without application changes. Set `INCIDENTLAB_LLM_API_KEY` when the endpoint requires bearer authentication; the server applies it to model discovery and generation requests and never returns it through the public system API.
 
 Readiness uses the OpenAI-compatible `GET /v1/models` contract and only enables model runs when `INCIDENTLAB_MODEL` appears in the returned model list. A reachable server with the wrong model loaded is intentionally reported as unavailable.
 

@@ -36,7 +36,7 @@ type IncidentDetail = IncidentSummary & {
 type KnowledgeCollection = { id: string; name: string; description: string; documents: number };
 type ExecutionMode = "baseline" | "model";
 type SystemStatus = {
-  llm: { provider: string; model: string; healthy: boolean; status: "ready" | "server_error" | "incompatible_server" | "model_not_loaded" | "server_unreachable"; message: string };
+  llm: { provider: string; model: string; healthy: boolean; status: "ready" | "authentication_failed" | "server_error" | "incompatible_server" | "model_not_loaded" | "server_unreachable"; message: string };
   execution_modes: {
     baseline: { available: boolean; oracle_backed: boolean; purpose: string };
     model: { available: boolean; oracle_backed: boolean; purpose: string };

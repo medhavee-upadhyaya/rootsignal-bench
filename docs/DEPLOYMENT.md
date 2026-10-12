@@ -25,9 +25,19 @@ The build prefixes browser API calls, evidence downloads, metadata images, frame
 
 Before exposing RootSignal beyond localhost, set `ROOTSIGNAL_API_KEYS` on the API to one or more comma-separated, secret-manager-supplied values of at least 16 characters. All mutations and sensitive reads then require `Authorization: Bearer <key>`, including incident data, run history, evidence exports, knowledge metadata, and metrics. Only health, readiness, system capability, and the published benchmark summary remain public. Set `ROOTSIGNAL_API_KEY` on the web service to one of those values so the server-side web proxy can authenticate without exposing the key to browser JavaScript. Leave both variables empty only for trusted local development.
 
+For a hosted OpenAI-compatible model endpoint, store its bearer credential as `INCIDENTLAB_LLM_API_KEY` on the API service. It is sent only to the configured model origin for `GET /v1/models` and `POST /v1/chat/completions`. Do not set it on the web container or expose it through a public-prefixed environment variable.
+
 Both containers run as UID 10001 with all Linux capabilities dropped, a read-only root filesystem, `no-new-privileges`, bounded temporary storage, and health checks. Only `/data` is writable for the API.
 
 ## Kubernetes
+
+Create the required application secret before applying the manifest. Add `llm-api-key` only when the configured model endpoint requires authentication:
+
+```bash
+kubectl create secret generic rootsignal-secrets \
+  --from-literal=api-key='<generate-a-random-value>' \
+  --from-literal=llm-api-key='<provider-value>'
+```
 
 Edit the model endpoint and immutable image versions in `deploy/kubernetes.yaml`, then apply it:
 

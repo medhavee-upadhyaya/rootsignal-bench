@@ -44,6 +44,7 @@ BENCHMARK_PATH = Path(os.getenv("INCIDENTLAB_BENCHMARK", "benchmarks/results/qwe
 LLM = OllamaClient(
     os.getenv("INCIDENTLAB_LLM_URL", "http://127.0.0.1:11434"),
     os.getenv("INCIDENTLAB_MODEL", "qwen3:1.7b"),
+    os.getenv("INCIDENTLAB_LLM_API_KEY"),
 )
 app = FastAPI(title="RootSignal API", version="0.2.0")
 LOGGER = logging.getLogger("rootsignal.api")
@@ -375,6 +376,8 @@ def system() -> dict[str, object]:
             "configuration": {
                 "endpoint_env": "INCIDENTLAB_LLM_URL",
                 "model_env": "INCIDENTLAB_MODEL",
+                "authentication_env": "INCIDENTLAB_LLM_API_KEY",
+                "authentication_configured": bool(LLM.api_key),
             },
         },
         "execution_modes": {
