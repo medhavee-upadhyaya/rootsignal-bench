@@ -1,0 +1,77 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      INCIDENTLAB_FIXTURES: /app/fixtures/incidents
+      INCIDENTLAB_DB: /data/incidentlab.db
+      INCIDENTLAB_LLM_URL: ${INCIDENTLAB_LLM_URL:?Set the hosted model URL}
+      INCIDENTLAB_MODEL: ${INCIDENTLAB_MODEL:?Set the hosted model name}
+      INCIDENTLAB_LLM_API_KEY: ${INCIDENTLAB_LLM_API_KEY:-}
+      ROOTSIGNAL_API_KEYS: ${ROOTSIGNAL_API_KEY:?Generate a private API key}
+      ROOTSIGNAL_RATE_LIMIT: ${ROOTSIGNAL_RATE_LIMIT:-30}
+      ROOTSIGNAL_RATE_WINDOW_SECONDS: ${ROOTSIGNAL_RATE_WINDOW_SECONDS:-60}
+    expose: ["8000"]
+    volumes:
+      - rootsignal-data:/data
+    networks: [backend]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        ROOTSIGNAL_BASE_PATH: ${ROOTSIGNAL_BASE_PATH:-/project/rootsignalbench}
+    environment:
+      INCIDENTLAB_API_URL: http://api:8000
+      ROOTSIGNAL_API_KEY: ${ROOTSIGNAL_API_KEY:?Use the API service key}
+      ROOTSIGNAL_BASE_PATH: ${ROOTSIGNAL_BASE_PATH:-/project/rootsignalbench}
+      SITE_URL: ${SITE_URL:-https://www.medhaveeupadhyaya.com/project/rootsignalbench}
+    ports:
+      - "${ROOTSIGNAL_WEB_BIND:-127.0.0.1}:${ROOTSIGNAL_WEB_PORT:-3000}:3000"
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [frontend, backend]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000$${ROOTSIGNAL_BASE_PATH}/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
+
+volumes:
+  rootsignal-data: {}

@@ -29,6 +29,24 @@ For a hosted OpenAI-compatible model endpoint, store its bearer credential as `I
 
 Both containers run as UID 10001 with all Linux capabilities dropped, a read-only root filesystem, `no-new-privileges`, bounded temporary storage, and health checks. Only `/data` is writable for the API.
 
+## Single-host production topology
+
+`deploy/production.compose.yaml` is the production boundary for a container host or a platform that accepts Compose services. It publishes only the web container on loopback, keeps the API on an internal network, persists `/data`, bounds CPU, memory, processes, temporary storage, and logs, and fails configuration when the application key or model identity is missing.
+
+Prepare the ignored environment file and validate interpolation before starting anything:
+
+```bash
+cp .env.example .env.production
+openssl rand -hex 32
+# Put the generated value and model settings into .env.production.
+docker compose --env-file .env.production -f deploy/production.compose.yaml config --quiet
+docker compose --env-file .env.production -f deploy/production.compose.yaml up -d --build
+```
+
+Do not publish port `8000`. Terminate TLS at the hosting ingress or reverse proxy and forward the public RootSignal path only to the loopback web port. The web container is the credential-holding backend-for-frontend; browsers should never call the Python API or model provider directly.
+
+The named `rootsignal-data` volume contains custom incidents, knowledge collections, job state, reviews, and run history. Configure host-level encrypted volume backups before accepting user data. A container restart is safe; deleting or recreating the volume is destructive.
+
 ## Kubernetes
 
 Create the required application secret before applying the manifest. Add `llm-api-key` only when the configured model endpoint requires authentication:
