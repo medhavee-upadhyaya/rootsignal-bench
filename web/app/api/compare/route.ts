@@ -1,6 +1,6 @@
 export async function POST(request: Request) {
   const body = await request.json();
-  const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
+  const apiBase = backendApiUrl();
   try {
     const response = await fetch(`${apiBase}/v1/comparisons`, {
       method: "POST",
@@ -16,3 +16,4 @@ export async function POST(request: Request) {
   }
 }
 import { backendHeaders } from "@/lib/api-auth";
+import { backendApiUrl } from "@/lib/backend-url";

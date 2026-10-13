@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   if (compareTo && !/^[a-f0-9]{32}$/.test(compareTo)) {
     return Response.json({ error: { message: "A valid comparison run id is required" } }, { status: 422 });
   }
-  const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
+  const apiBase = backendApiUrl();
   const comparison = compareTo ? `?compare_to=${encodeURIComponent(compareTo)}` : "";
   try {
     const response = await fetch(
@@ -27,3 +27,4 @@ export async function GET(request: Request) {
   }
 }
 import { backendHeaders } from "@/lib/api-auth";
+import { backendApiUrl } from "@/lib/backend-url";

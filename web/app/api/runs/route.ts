@@ -1,5 +1,5 @@
 export async function GET(request: Request) {
-  const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
+  const apiBase = backendApiUrl();
   const runId = new URL(request.url).searchParams.get("run_id");
   const cursor = new URL(request.url).searchParams.get("cursor");
   const incidentId = new URL(request.url).searchParams.get("incident_id");
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
+  const apiBase = backendApiUrl();
   const runId = new URL(request.url).searchParams.get("run_id");
   if (!runId) return Response.json({ error: { message: "run_id is required" } }, { status: 422 });
   try {
@@ -43,3 +43,4 @@ export async function POST(request: Request) {
   }
 }
 import { backendHeaders } from "@/lib/api-auth";
+import { backendApiUrl } from "@/lib/backend-url";

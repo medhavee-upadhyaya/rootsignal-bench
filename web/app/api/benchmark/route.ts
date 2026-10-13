@@ -1,5 +1,7 @@
+import { backendApiUrl } from "@/lib/backend-url";
+
 export async function GET() {
-  const apiBase = process.env.INCIDENTLAB_API_URL || "http://127.0.0.1:8000";
+  const apiBase = backendApiUrl();
   try {
     const response = await fetch(`${apiBase}/v1/benchmarks/latest`, { cache: "no-store" });
     return new Response(await response.text(), {

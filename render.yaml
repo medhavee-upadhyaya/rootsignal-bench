@@ -1,0 +1,66 @@
+services:
+  - type: pserv
+    name: rootsignal-api
+    runtime: docker
+    plan: 0.5c-512mb
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 60
+    disk:
+      name: rootsignal-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: INCIDENTLAB_FIXTURES
+        value: /app/fixtures/incidents
+      - key: INCIDENTLAB_DB
+        value: /data/incidentlab.db
+      - key: ROOTSIGNAL_API_KEYS
+        generateValue: true
+      - key: ROOTSIGNAL_RATE_LIMIT
+        value: "30"
+      - key: ROOTSIGNAL_RATE_WINDOW_SECONDS
+        value: "60"
+      - key: INCIDENTLAB_LLM_URL
+        sync: false
+      - key: INCIDENTLAB_MODEL
+        sync: false
+      - key: INCIDENTLAB_LLM_API_KEY
+        sync: false
+
+  - type: web
+    name: rootsignal-web
+    runtime: docker
+    plan: 0.5c-512mb
+    region: oregon
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    autoDeployTrigger: checksPass
+    healthCheckPath: /project/rootsignalbench/
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: ROOTSIGNAL_BASE_PATH
+        value: /project/rootsignalbench
+      - key: SITE_URL
+        value: https://www.medhaveeupadhyaya.com/project/rootsignalbench
+      - key: INCIDENTLAB_API_HOST
+        fromService:
+          type: pserv
+          name: rootsignal-api
+          property: host
+      - key: INCIDENTLAB_API_PORT
+        fromService:
+          type: pserv
+          name: rootsignal-api
+          property: port
+      - key: ROOTSIGNAL_API_KEY
+        fromService:
+          type: pserv
+          name: rootsignal-api
+          envVarKey: ROOTSIGNAL_API_KEYS

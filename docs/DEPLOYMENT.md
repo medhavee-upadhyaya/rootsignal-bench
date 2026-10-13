@@ -47,6 +47,24 @@ Do not publish port `8000`. Terminate TLS at the hosting ingress or reverse prox
 
 The named `rootsignal-data` volume contains custom incidents, knowledge collections, job state, reviews, and run history. Configure host-level encrypted volume backups before accepting user data. A container restart is safe; deleting or recreating the volume is destructive.
 
+## Render Blueprint
+
+`render.yaml` defines a deployable two-service topology: `rootsignal-web` is the only public service, while `rootsignal-api` is reachable only through Render's private network. The web service discovers the API from platform-provided host and port properties. Render generates the RootSignal application credential and copies it to the web service without committing it to Git. Model endpoint values are entered in the Render dashboard during Blueprint creation.
+
+Both services use the smallest paid 512 MB compute plan. The API also uses a 1 GB persistent disk mounted at `/data`; Render requires paid compute for persistent disks and bills storage separately. Review the estimate shown by Render before approving Blueprint creation. Creating the Blueprint is the cost-bearing action; committing this file is not.
+
+To deploy:
+
+1. In Render, create a new Blueprint from this repository and keep the Blueprint path as `render.yaml`.
+2. Enter `INCIDENTLAB_LLM_URL`, `INCIDENTLAB_MODEL`, and, when required, `INCIDENTLAB_LLM_API_KEY`. Never put those values in Git.
+3. Review the displayed monthly estimate, then approve creation only if the cost is acceptable.
+4. Wait for both service health checks to pass. The public Render URL ends with `/project/rootsignalbench/`.
+5. Run one control investigation, one model investigation, reload the saved run, and export its evidence before configuring portfolio routing.
+
+The Blueprint deploys only after GitHub checks pass. The API disk is encrypted and receives daily platform snapshots, but it restricts the API to one instance and causes brief downtime during API deploys. Export important experiment evidence independently; a platform snapshot is not a substitute for an application-level backup.
+
+Do not attach `medhaveeupadhyaya.com` directly to the RootSignal service while the portfolio already owns that domain. After the Render URL is verified, configure the portfolio host to proxy `/project/rootsignalbench` and all nested paths to the Render web service. That routing change is a separate deployment step.
+
 ## Kubernetes
 
 Create the required application secret before applying the manifest. Add `llm-api-key` only when the configured model endpoint requires authentication:

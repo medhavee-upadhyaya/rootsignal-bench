@@ -137,6 +137,18 @@ test("keeps backend authentication in the server-side proxy", async () => {
   assert.doesNotMatch(auth, /NEXT_PUBLIC_/);
 });
 
+test("discovers a hosted backend without exposing it to the browser", async () => {
+  const [helper, route] = await Promise.all([
+    readFile(new URL("../lib/backend-url.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/investigate/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(helper, /process\.env\.INCIDENTLAB_API_HOST/);
+  assert.match(helper, /process\.env\.INCIDENTLAB_API_PORT/);
+  assert.match(helper, /http:\/\/\$\{host\}/);
+  assert.doesNotMatch(helper, /NEXT_PUBLIC_/);
+  assert.match(route, /backendApiUrl\(\)/);
+});
+
 test("separates real incident response from oracle-backed evaluation", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /Live investigation/);

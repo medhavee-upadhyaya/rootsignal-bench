@@ -15,6 +15,7 @@ class ProductionDeploymentTests(unittest.TestCase):
         cls.compose = yaml.safe_load(
             (ROOT / "deploy/production.compose.yaml").read_text(encoding="utf-8")
         )
+        cls.render = yaml.safe_load((ROOT / "render.yaml").read_text(encoding="utf-8"))
 
     def test_only_web_is_exposed_and_api_network_is_private(self) -> None:
         services = self.compose["services"]
@@ -53,6 +54,41 @@ class ProductionDeploymentTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("docker compose -f deploy/production.compose.yaml config --quiet", workflow)
         self.assertIn("ROOTSIGNAL_BASE_PATH=/project/rootsignalbench", workflow)
+
+    def test_render_blueprint_keeps_api_private_and_state_persistent(self) -> None:
+        services = {service["name"]: service for service in self.render["services"]}
+        api = services["rootsignal-api"]
+        web = services["rootsignal-web"]
+        self.assertEqual(api["type"], "pserv")
+        self.assertEqual(api["disk"]["mountPath"], "/data")
+        self.assertEqual(api["disk"]["sizeGB"], 1)
+        self.assertEqual(web["type"], "web")
+        self.assertEqual(web["healthCheckPath"], "/project/rootsignalbench/")
+        api_env = {entry["key"]: entry for entry in api["envVars"]}
+        web_env = {entry["key"]: entry for entry in web["envVars"]}
+        self.assertEqual(api_env["PORT"]["value"], "8000")
+        self.assertEqual(web_env["PORT"]["value"], "3000")
+        self.assertEqual(api["autoDeployTrigger"], "checksPass")
+        self.assertEqual(web["autoDeployTrigger"], "checksPass")
+
+    def test_render_blueprint_generates_and_reuses_api_credential(self) -> None:
+        services = {service["name"]: service for service in self.render["services"]}
+        api_env = {entry["key"]: entry for entry in services["rootsignal-api"]["envVars"]}
+        web_env = {entry["key"]: entry for entry in services["rootsignal-web"]["envVars"]}
+        self.assertTrue(api_env["ROOTSIGNAL_API_KEYS"]["generateValue"])
+        self.assertEqual(
+            web_env["ROOTSIGNAL_API_KEY"]["fromService"],
+            {"type": "pserv", "name": "rootsignal-api", "envVarKey": "ROOTSIGNAL_API_KEYS"},
+        )
+        self.assertTrue(api_env["INCIDENTLAB_LLM_URL"]["sync"] is False)
+        self.assertTrue(api_env["INCIDENTLAB_MODEL"]["sync"] is False)
+
+    def test_render_web_discovers_api_through_private_service_properties(self) -> None:
+        services = {service["name"]: service for service in self.render["services"]}
+        web_env = {entry["key"]: entry for entry in services["rootsignal-web"]["envVars"]}
+        self.assertEqual(web_env["INCIDENTLAB_API_HOST"]["fromService"]["property"], "host")
+        self.assertEqual(web_env["INCIDENTLAB_API_PORT"]["fromService"]["property"], "port")
+        self.assertEqual(web_env["ROOTSIGNAL_BASE_PATH"]["value"], "/project/rootsignalbench")
 
 
 if __name__ == "__main__":
