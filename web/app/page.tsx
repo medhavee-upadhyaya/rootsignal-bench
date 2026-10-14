@@ -760,6 +760,7 @@ export default function Home() {
         </nav>
         <div className="top-actions">
           <span className="environment"><i /> Local environment</span>
+          <a className="github-button" href={appPath("/playground")}>Try online →</a>
           <a className="github-button" href="https://github.com/medhavee-upadhyaya/rootsignal-bench" target="_blank" rel="noreferrer">GitHub ↗</a>
         </div>
       </header>
