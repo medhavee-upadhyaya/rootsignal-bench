@@ -29,6 +29,9 @@ jobs:
       - run: npm ci --prefix web
       - run: npm --prefix web run lint
       - run: npm --prefix web test
+      - run: npm --prefix web run build:vercel
+      - name: Verify Vercel artifact
+        run: test -f web/.vercel/output/config.json && test -d web/.vercel/output/functions && test -d web/.vercel/output/static
   container:
     runs-on: ubuntu-latest
     steps:
