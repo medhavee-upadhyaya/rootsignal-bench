@@ -21,6 +21,7 @@ dev = ["ruff>=0.7,<1", "mypy>=1.12,<2"]
 [project.scripts]
 rootsignal = "incidentlab.cli:main"
 incidentlab = "incidentlab.cli:main"
+rootsignal-smoke = "incidentlab.deployment_smoke:main"
 
 [tool.setuptools.packages.find]
 include = ["incidentlab*", "evals*", "training*", "benchmarks*"]

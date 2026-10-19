@@ -65,6 +65,22 @@ The Blueprint deploys only after GitHub checks pass. The API disk is encrypted a
 
 Do not attach `medhaveeupadhyaya.com` directly to the RootSignal service while the portfolio already owns that domain. After the Render URL is verified, configure the portfolio host to proxy `/project/rootsignalbench` and all nested paths to the Render web service. That routing change is a separate deployment step.
 
+## Verify a public deployment
+
+Run the smoke checker against the final public URL after every deployment. The default mode verifies the homepage, zero-cost browser playground, prefixed asset routing, content types, and redirect boundary without requiring a RootSignal backend:
+
+```bash
+rootsignal-smoke https://medhaveeupadhyaya.com/project/rootsignalbench
+```
+
+When the Python API and model-serving topology are deployed, require the web backend-for-frontend and validate its public capability response too:
+
+```bash
+rootsignal-smoke https://medhaveeupadhyaya.com/project/rootsignalbench --full-stack
+```
+
+The command exits nonzero if any check fails, so it can be used as a release or uptime gate. A passing platform build is not a substitute for this public-path verification.
+
 ## Kubernetes
 
 Create the required application secret before applying the manifest. Add `llm-api-key` only when the configured model endpoint requires authentication:
