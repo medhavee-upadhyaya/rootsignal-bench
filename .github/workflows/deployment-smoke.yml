@@ -1,0 +1,66 @@
+name: Deployment smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_url:
+        description: Public RootSignal URL, including its path prefix
+        required: true
+        type: string
+      full_stack:
+        description: Require the backend-for-frontend and API capability response
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deployment-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Verify public deployment
+        id: smoke
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ inputs.deployment_url }}
+          FULL_STACK: ${{ inputs.full_stack }}
+        run: |
+          args=()
+          if [[ "$FULL_STACK" == "true" ]]; then
+            args+=(--full-stack)
+          fi
+
+          status=0
+          python -m incidentlab.deployment_smoke "$DEPLOYMENT_URL" "${args[@]}" \
+            >deployment-smoke.txt 2>&1 || status=$?
+
+          {
+            echo "## RootSignal deployment verification"
+            echo
+            echo '```text'
+            cat deployment-smoke.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          cat deployment-smoke.txt
+          exit "$status"
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-smoke-${{ github.run_id }}
+          path: deployment-smoke.txt
+          if-no-files-found: error
+          retention-days: 30

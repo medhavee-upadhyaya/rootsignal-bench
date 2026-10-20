@@ -55,6 +55,22 @@ class ProductionDeploymentTests(unittest.TestCase):
         self.assertIn("docker compose -f deploy/production.compose.yaml config --quiet", workflow)
         self.assertIn("ROOTSIGNAL_BASE_PATH=/project/rootsignalbench", workflow)
 
+    def test_manual_deployment_check_runs_real_smoke_probe_and_keeps_evidence(self) -> None:
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/deployment-smoke.yml").read_text(encoding="utf-8")
+        )
+        triggers = workflow.get("on", workflow.get(True))
+        dispatch = triggers["workflow_dispatch"]["inputs"]
+        self.assertTrue(dispatch["deployment_url"]["required"])
+        self.assertEqual(dispatch["full_stack"]["type"], "boolean")
+        steps = workflow["jobs"]["verify"]["steps"]
+        script = next(step["run"] for step in steps if step.get("id") == "smoke")
+        self.assertIn('"$DEPLOYMENT_URL"', script)
+        self.assertIn("incidentlab.deployment_smoke", script)
+        artifact = next(step for step in steps if step.get("uses") == "actions/upload-artifact@v4")
+        self.assertEqual(artifact["if"], "always()")
+        self.assertEqual(artifact["with"]["retention-days"], 30)
+
     def test_render_blueprint_keeps_api_private_and_state_persistent(self) -> None:
         services = {service["name"]: service for service in self.render["services"]}
         api = services["rootsignal-api"]
