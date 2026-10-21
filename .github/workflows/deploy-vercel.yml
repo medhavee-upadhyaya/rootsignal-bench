@@ -1,0 +1,88 @@
+name: Deploy web to Vercel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rootsignal-vercel-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Require deployment credentials
+        shell: bash
+        run: |
+          for name in VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+      - run: npm ci
+        working-directory: web
+      - run: npm install --global vercel@65.0.0
+      - name: Pull production configuration
+        run: vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+        working-directory: web
+      - name: Build production artifact
+        run: vercel build --prod --token "$VERCEL_TOKEN"
+        working-directory: web
+      - name: Deploy production artifact
+        id: deploy
+        shell: bash
+        working-directory: web
+        run: |
+          vercel deploy --prebuilt --prod --archive=tgz --token "$VERCEL_TOKEN" \
+            | tee deployment-origin.txt
+          deployment_origin="$(tail -n 1 deployment-origin.txt | tr -d '[:space:]')"
+          if [[ "$deployment_origin" != https://* ]]; then
+            echo "Vercel did not return a valid HTTPS deployment URL" >&2
+            exit 1
+          fi
+          echo "origin=$deployment_origin" >> "$GITHUB_OUTPUT"
+      - run: pip install -e .
+      - name: Verify deployed browser product
+        env:
+          DEPLOYMENT_ORIGIN: ${{ steps.deploy.outputs.origin }}
+        run: |
+          public_url="${DEPLOYMENT_ORIGIN%/}/project/rootsignalbench"
+          python -m incidentlab.deployment_smoke "$public_url" | tee deployment-smoke.txt
+          {
+            echo "## RootSignal production deployment"
+            echo
+            echo "Deployment: $public_url"
+            echo
+            echo '```text'
+            cat deployment-smoke.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-production-${{ github.run_id }}
+          path: |
+            web/deployment-origin.txt
+            deployment-smoke.txt
+          if-no-files-found: warn
+          retention-days: 30

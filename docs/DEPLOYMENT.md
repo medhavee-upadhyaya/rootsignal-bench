@@ -81,6 +81,12 @@ rootsignal-smoke https://medhaveeupadhyaya.com/project/rootsignalbench --full-st
 
 The command exits nonzero if any check fails, so it can be used as a release or uptime gate. A passing platform build is not a substitute for this public-path verification.
 
+### Zero-cost Vercel web deployment
+
+The manual `Deploy web to Vercel` GitHub workflow builds and publishes the browser product on Vercel, then runs the deployment smoke check before reporting success. Configure `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` as GitHub Actions secrets, open **Actions → Deploy web to Vercel → Run workflow**, and use the verified URL from the run summary. The workflow is manual so a repository push cannot unexpectedly create or promote a deployment.
+
+This deployment provides the complete zero-cost browser playground. The full engineering workspace still needs a separately hosted Python API and model endpoint; the deployment check does not misrepresent those services as available.
+
 ## Kubernetes
 
 Create the required application secret before applying the manifest. Add `llm-api-key` only when the configured model endpoint requires authentication:

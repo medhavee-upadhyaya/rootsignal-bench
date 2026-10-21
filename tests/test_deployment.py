@@ -71,6 +71,23 @@ class ProductionDeploymentTests(unittest.TestCase):
         self.assertEqual(artifact["if"], "always()")
         self.assertEqual(artifact["with"]["retention-days"], 30)
 
+    def test_vercel_production_deploy_is_manual_guarded_and_smoke_tested(self) -> None:
+        workflow = yaml.safe_load(
+            (ROOT / ".github/workflows/deploy-vercel.yml").read_text(encoding="utf-8")
+        )
+        triggers = workflow.get("on", workflow.get(True))
+        self.assertIn("workflow_dispatch", triggers)
+        job = workflow["jobs"]["deploy"]
+        self.assertEqual(job["environment"], "production")
+        self.assertFalse(workflow["concurrency"]["cancel-in-progress"])
+        script = "\n".join(str(step.get("run", "")) for step in job["steps"])
+        self.assertIn("vercel build --prod", script)
+        self.assertIn("vercel deploy --prebuilt --prod", script)
+        self.assertIn("incidentlab.deployment_smoke", script)
+        self.assertIn("/project/rootsignalbench", script)
+        for secret in ("VERCEL_ORG_ID", "VERCEL_PROJECT_ID", "VERCEL_TOKEN"):
+            self.assertIn(secret, job["env"])
+
     def test_render_blueprint_keeps_api_private_and_state_persistent(self) -> None:
         services = {service["name"]: service for service in self.render["services"]}
         api = services["rootsignal-api"]
