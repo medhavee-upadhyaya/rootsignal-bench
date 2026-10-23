@@ -89,6 +89,18 @@ npm run dev
 
 Open `http://localhost:3000` for the complete investigation workspace. The web server proxies investigation requests to the API at `http://127.0.0.1:8000`; set `INCIDENTLAB_API_URL` to use another backend.
 
+Inspect exactly what the RAG layer retrieves from the running product database:
+
+```bash
+rootsignal search "checkout database pool wait" \
+  --db work/incidentlab.db \
+  --collection incident-runbooks \
+  --strategy reranked \
+  --limit 5
+```
+
+The JSON output includes rank, chunk ID, source provenance, content, and lexical, semantic, and reranking scores. Repeat `--collection` to audit a multi-collection scope or change `--strategy` to compare retrieval stages directly.
+
 From the workspace, a user can create an ungraded live incident using observed metrics, logs, and deployment history. An incident-specific runbook is optional; the agent can still retrieve from the separately selected knowledge collections. Evaluation authors can instead attach a private oracle for scoring and regression comparison. Live investigations are kept out of benchmark suites; private grading oracles are stored server-side and never returned by catalog APIs.
 
 External systems can create an investigation-ready live incident without constructing a benchmark fixture:
