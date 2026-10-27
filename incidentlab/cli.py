@@ -4,11 +4,28 @@ import argparse
 import json
 import os
 from collections.abc import Sequence
+from pathlib import Path
 
 from .agent import Investigator
 from .evaluation import score
 from .fixtures import load_incident
 from .knowledge import KnowledgeBase
+
+MAX_KNOWLEDGE_FILE_BYTES = 1_000_000
+
+
+def _read_knowledge_file(path: Path) -> str:
+    if not path.is_file():
+        raise ValueError("knowledge path must be a readable file")
+    if path.stat().st_size > MAX_KNOWLEDGE_FILE_BYTES:
+        raise ValueError("knowledge file exceeds the 1 MB limit")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("knowledge file must be UTF-8 text") from exc
+    if len(text.strip()) < 20:
+        raise ValueError("knowledge file must contain at least 20 characters")
+    return text
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -34,7 +51,31 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     search.add_argument("--collection", action="append", dest="collections")
     search.add_argument("--limit", type=int, choices=range(1, 21), default=6, metavar="1-20")
+    ingest = subparsers.add_parser(
+        "ingest", help="index a UTF-8 runbook in a scoped knowledge collection"
+    )
+    ingest.add_argument("file", type=Path)
+    ingest.add_argument("--source", required=True, help="stable source provenance label")
+    ingest.add_argument("--collection", default="incident-runbooks")
+    ingest.add_argument(
+        "--db",
+        default=os.getenv("INCIDENTLAB_DB", "work/incidentlab.db"),
+        help="path to the RootSignal SQLite database",
+    )
     args = parser.parse_args(argv)
+
+    if args.command == "ingest":
+        if not 1 <= len(args.source.strip()) <= 200:
+            parser.error("--source must contain 1 to 200 characters")
+        try:
+            text = _read_knowledge_file(args.file)
+            result = KnowledgeBase(args.db).ingest(
+                args.source.strip(), text, args.collection
+            )
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(result, indent=2))
+        return
 
     if args.command == "search":
         chunks = KnowledgeBase(args.db).search(
