@@ -62,7 +62,43 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=os.getenv("INCIDENTLAB_DB", "work/incidentlab.db"),
         help="path to the RootSignal SQLite database",
     )
+    collections = subparsers.add_parser(
+        "collections", help="create or inspect scoped knowledge collections"
+    )
+    collection_commands = collections.add_subparsers(
+        dest="collection_command", required=True
+    )
+    list_collections = collection_commands.add_parser("list")
+    list_collections.add_argument(
+        "--db",
+        default=os.getenv("INCIDENTLAB_DB", "work/incidentlab.db"),
+        help="path to the RootSignal SQLite database",
+    )
+    create_collection = collection_commands.add_parser("create")
+    create_collection.add_argument("collection_id")
+    create_collection.add_argument("--name", required=True)
+    create_collection.add_argument("--description", default="")
+    create_collection.add_argument(
+        "--db",
+        default=os.getenv("INCIDENTLAB_DB", "work/incidentlab.db"),
+        help="path to the RootSignal SQLite database",
+    )
     args = parser.parse_args(argv)
+
+    if args.command == "collections":
+        knowledge = KnowledgeBase(args.db)
+        if args.collection_command == "list":
+            items = knowledge.list_collections()
+            print(json.dumps({"count": len(items), "collections": items}, indent=2))
+            return
+        try:
+            result = knowledge.create_collection(
+                args.collection_id, args.name, args.description
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        print(json.dumps(result, indent=2))
+        return
 
     if args.command == "ingest":
         if not 1 <= len(args.source.strip()) <= 200:

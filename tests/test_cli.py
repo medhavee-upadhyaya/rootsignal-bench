@@ -12,6 +12,44 @@ from incidentlab.knowledge import KnowledgeBase
 
 
 class RootSignalCliTests(unittest.TestCase):
+    def test_collections_create_and_list_scoped_indexes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "knowledge.db"
+            created_output = io.StringIO()
+            with redirect_stdout(created_output):
+                main([
+                    "collections", "create", "payments-team",
+                    "--name", "Payments team",
+                    "--description", "Private payment service runbooks",
+                    "--db", str(database),
+                ])
+
+            created = json.loads(created_output.getvalue())
+            self.assertEqual(created["id"], "payments-team")
+            self.assertEqual(created["name"], "Payments team")
+
+            listed_output = io.StringIO()
+            with redirect_stdout(listed_output):
+                main(["collections", "list", "--db", str(database)])
+
+            listed = json.loads(listed_output.getvalue())
+            by_id = {item["id"]: item for item in listed["collections"]}
+            self.assertEqual(listed["count"], 2)
+            self.assertIn("incident-runbooks", by_id)
+            self.assertEqual(by_id["payments-team"]["documents"], 0)
+
+    def test_collections_reject_invalid_or_duplicate_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "knowledge.db"
+            error = io.StringIO()
+            command = [
+                "collections", "create", "invalid id", "--name", "Invalid",
+                "--db", str(database),
+            ]
+            with redirect_stderr(error), self.assertRaises(SystemExit):
+                main(command)
+            self.assertIn("lowercase letters, digits, and hyphens", error.getvalue())
+
     def test_ingest_indexes_a_file_and_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

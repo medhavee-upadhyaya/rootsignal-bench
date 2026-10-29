@@ -92,19 +92,24 @@ Open `http://localhost:3000` for the complete investigation workspace. The web s
 Inspect exactly what the RAG layer retrieves from the running product database:
 
 ```bash
+rootsignal collections create checkout-team \
+  --name "Checkout team" \
+  --description "Checkout service runbooks" \
+  --db work/incidentlab.db
+
 rootsignal ingest ./runbooks/checkout.md \
   --source runbook/checkout \
   --db work/incidentlab.db \
-  --collection incident-runbooks
+  --collection checkout-team
 
 rootsignal search "checkout database pool wait" \
   --db work/incidentlab.db \
-  --collection incident-runbooks \
+  --collection checkout-team \
   --strategy reranked \
   --limit 5
 ```
 
-Ingestion accepts UTF-8 text up to 1 MB, rejects credential-like content before persistence, and is idempotent by content digest. Search output includes rank, chunk ID, source provenance, content, and lexical, semantic, and reranking scores. Repeat `--collection` to audit a multi-collection scope or change `--strategy` to compare retrieval stages directly.
+Collection IDs isolate team or service knowledge scopes and `rootsignal collections list` reports their indexed document counts. Ingestion accepts UTF-8 text up to 1 MB, rejects credential-like content before persistence, and is idempotent by content digest. Search output includes rank, chunk ID, source provenance, content, and lexical, semantic, and reranking scores. Repeat `--collection` to audit a multi-collection scope or change `--strategy` to compare retrieval stages directly.
 
 From the workspace, a user can create an ungraded live incident using observed metrics, logs, and deployment history. An incident-specific runbook is optional; the agent can still retrieve from the separately selected knowledge collections. Evaluation authors can instead attach a private oracle for scoring and regression comparison. Live investigations are kept out of benchmark suites; private grading oracles are stored server-side and never returned by catalog APIs.
 
