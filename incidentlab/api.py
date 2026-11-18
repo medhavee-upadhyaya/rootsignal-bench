@@ -189,6 +189,15 @@ class KnowledgeRequest(BaseModel):
     text: str = Field(min_length=20, max_length=1_000_000)
 
 
+class KnowledgeSearchRequest(BaseModel):
+    query: str = Field(min_length=3, max_length=2000)
+    collection_ids: list[str] = Field(
+        default_factory=lambda: ["incident-runbooks"], min_length=1, max_length=10
+    )
+    strategy: Literal["lexical", "semantic", "hybrid", "reranked"] = "reranked"
+    limit: int = Field(default=6, ge=1, le=20)
+
+
 class CollectionRequest(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9-]+$")
     name: str = Field(min_length=1, max_length=100)
@@ -831,6 +840,41 @@ def ingest_knowledge(request: KnowledgeRequest) -> dict[str, object]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/v1/knowledge/search")
+def search_knowledge(request: KnowledgeSearchRequest) -> dict[str, object]:
+    query = request.query.strip()
+    try:
+        reject_secrets(query)
+    except SensitiveContentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    collections = _validated_collections(request.collection_ids)
+    chunks = KNOWLEDGE.search(
+        query,
+        limit=request.limit,
+        strategy=request.strategy,
+        collection_ids=collections,
+    )
+    return {
+        "query": query,
+        "strategy": request.strategy,
+        "collections": collections,
+        "count": len(chunks),
+        "results": [
+            {
+                "rank": rank,
+                "chunk_id": chunk.chunk_id,
+                "source": chunk.source,
+                "content": chunk.content,
+                "score": chunk.score,
+                "lexical_score": chunk.lexical_score,
+                "semantic_score": chunk.semantic_score,
+                "rerank_score": chunk.rerank_score,
+            }
+            for rank, chunk in enumerate(chunks, 1)
+        ],
+    }
 
 
 @app.get("/v1/knowledge/collections")

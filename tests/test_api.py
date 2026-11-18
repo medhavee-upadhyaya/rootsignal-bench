@@ -435,6 +435,63 @@ class APITests(unittest.TestCase):
         collection = next(item for item in catalog["collections"] if item["id"] == collection_id)
         self.assertEqual(collection["documents"], 1)
 
+    def test_knowledge_search_returns_scoped_ranked_provenance(self) -> None:
+        collection_id = f"search-{uuid.uuid4().hex}"
+        status, _, _ = asgi_request(
+            "POST",
+            "/v1/knowledge/collections",
+            body={"id": collection_id, "name": "Search test"},
+        )
+        self.assertEqual(status, 201)
+        for source, text in (
+            ("runbook/pool", "Checkout database pool saturation increases connection wait time."),
+            ("runbook/cert", "Rotate TLS certificates before they expire in production."),
+        ):
+            status, _, _ = asgi_request(
+                "POST",
+                "/v1/knowledge",
+                body={"collection_id": collection_id, "source": source, "text": text},
+            )
+            self.assertEqual(status, 200)
+
+        status, _, payload = asgi_request(
+            "POST",
+            "/v1/knowledge/search",
+            body={
+                "query": "checkout database pool wait",
+                "collection_ids": [collection_id],
+                "strategy": "reranked",
+                "limit": 1,
+            },
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["collections"], [collection_id])
+        self.assertEqual(payload["count"], 1)
+        result = payload["results"][0]
+        self.assertEqual(result["rank"], 1)
+        self.assertEqual(result["source"], "runbook/pool")
+        for field in ("chunk_id", "score", "lexical_score", "semantic_score", "rerank_score"):
+            self.assertIn(field, result)
+
+    def test_knowledge_search_rejects_unknown_scope_and_credentials(self) -> None:
+        status, _, unknown = asgi_request(
+            "POST",
+            "/v1/knowledge/search",
+            body={"query": "database pool", "collection_ids": ["missing-collection"]},
+        )
+        self.assertEqual(status, 422)
+        self.assertIn("Unknown knowledge collections", unknown["error"]["message"])
+
+        credential = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
+        status, _, rejected = asgi_request(
+            "POST",
+            "/v1/knowledge/search",
+            body={"query": f"find leaked key {credential}"},
+        )
+        self.assertEqual(status, 422)
+        self.assertNotIn(credential, json.dumps(rejected))
+
     def test_both_execution_modes_reject_unknown_knowledge_scope(self) -> None:
         request = {
             "incident_id": "checkout-latency-001",
